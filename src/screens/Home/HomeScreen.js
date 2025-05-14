@@ -1,53 +1,145 @@
-// src/screens/Home/HomeScreen.js
-import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, FlatList, TextInput, Image, TouchableOpacity } from "react-native";
-import { collection, getDocs } from "firebase/firestore";
+import React, { useEffect, useState, useRef } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TextInput,
+  Image,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  Dimensions, // Importa Dimensions para obtener el ancho de la pantalla
+  Platform, // Importa Platform
+} from "react-native";
+
+import { collection, onSnapshot, query, where, getDocs } from "firebase/firestore";
 import { db } from "../../firebase/firebaseConfig";
-import Carousel from "react-native-reanimated-carousel"; // o usa un paquete como react-native-snap-carousel
+import { ProductCard } from "../../components/ProductCard";
+
+const { width: screenWidth } = Dimensions.get('window'); // Obtiene el ancho de la pantalla
 
 export default function HomeScreen({ navigation }) {
   const [products, setProducts] = useState([]);
   const [search, setSearch] = useState("");
   const [filtered, setFiltered] = useState([]);
-  const banners = [
-    // require("../../../assets/banner1.jpg"),
-    // require("../../../assets/banner2.jpg"),
-    { uri: "https://via.placeholder.com/300x180?text=Banner+1" },
-    { uri: "https://via.placeholder.com/300x180?text=Banner+2" },
-  ];
+  const [loading, setLoading] = useState(true);
+  const [bannersFromFirebase, setBannersFromFirebase] = useState([]);
+  const [loadingBanners, setLoadingBanners] = useState(true);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const flatListRef = useRef(null);
 
-  const fetchProducts = async () => {
-    const snapshot = await getDocs(collection(db, "products"));
-    const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    setProducts(data);
-    setFiltered(data);
+  const fetchBanners = async () => {
+    setLoadingBanners(true);
+    try {
+      const bannersCollection = collection(db, "banners");
+      const snapshot = await getDocs(bannersCollection);
+      const bannersData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      console.log("Banners fetched from Firebase:", bannersData);
+      setBannersFromFirebase(bannersData);
+    } catch (error) {
+      console.error("Error fetching banners from Firebase:", error);
+      Alert.alert("Error", "No se pudieron cargar los banners.");
+    } finally {
+      setLoadingBanners(false);
+    }
+  };
+
+  const setupProductListener = () => {
+    setLoading(true);
+    const productsCollection = collection(db, "products");
+    const availableProductsQuery = query(
+      productsCollection,
+      where("available", "==", true)
+    );
+
+    const unsubscribe = onSnapshot(
+      availableProductsQuery,
+      (snapshot) => {
+        const data = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        console.log("Available products fetched (onSnapshot):", data.length);
+        setProducts(data);
+        const filteredData = data.filter((p) =>
+          p.name && typeof p.name === 'string' && p.name.toLowerCase().includes(search.toLowerCase())
+        );
+        setFiltered(filteredData);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Error fetching products with onSnapshot:", error);
+        setLoading(false);
+        Alert.alert("Error", "No se pudieron cargar los productos.");
+      }
+    );
+
+    return unsubscribe;
   };
 
   useEffect(() => {
-    fetchProducts();
+    console.log("Setting up product listener...");
+    const unsubscribe = setupProductListener();
+    fetchBanners();
+
+    return () => {
+      console.log("Cleaning up product listener...");
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
+    console.log("Search text changed:", search);
     const filteredData = products.filter((p) =>
-      p.name.toLowerCase().includes(search.toLowerCase())
+      p.name && typeof p.name === 'string' && p.name.toLowerCase().includes(search.toLowerCase())
     );
     setFiltered(filteredData);
-  }, [search]);
+  }, [search, products]);
 
-  const renderItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.card}
+  useEffect(() => {
+    if (bannersFromFirebase.length > 0) {
+      const intervalId = setInterval(() => {
+        const nextIndex = (currentIndex + 1) % bannersFromFirebase.length;
+        setCurrentIndex(nextIndex);
+        flatListRef.current?.scrollToOffset({
+          offset: nextIndex * screenWidth,
+          animated: true,
+        });
+      }, 3000); // Cambia de banner cada 3 segundos (ajusta el valor según necesites)
+
+      return () => clearInterval(intervalId); // Limpia el intervalo al desmontar el componente
+    }
+  }, [bannersFromFirebase, currentIndex]);
+
+  const renderProductItem = ({ item }) => (
+    <ProductCard
+      product={item}
       onPress={() => navigation.navigate("ProductDetail", { product: item })}
+    />
+  );
+
+  const renderBannerItem = ({ item }) => (
+    <TouchableOpacity
+      style={[styles.bannerItem]} // Aplica el estilo para el ancho total
+      onPress={() => {
+        if (item.productId) {
+          navigation.navigate("ProductDetail", { productId: item.productId });
+        } else {
+          console.log("Banner clicked, no product associated.");
+        }
+      }}
     >
-      {/* <Image source={{ uri: item.image }} style={styles.image} /> */}
-      <Image source={item} style={styles.banner} resizeMode="cover" />
-      <Text style={styles.title}>{item.name}</Text>
-      <Text style={styles.price}>${item.price}</Text>
+      <Image source={{ uri: item.imageUrl }} style={styles.bannerImage} resizeMode="cover" />
     </TouchableOpacity>
   );
 
   return (
     <View style={styles.container}>
+      {/* Barra de Búsqueda */}
       <TextInput
         placeholder="Buscar producto..."
         style={styles.search}
@@ -55,32 +147,89 @@ export default function HomeScreen({ navigation }) {
         onChangeText={setSearch}
       />
 
-      {/* Banner */}
-      <FlatList
-        data={banners}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        renderItem={({ item }) => (
-          <Image source={item} style={styles.banner} resizeMode="cover" />
-        )}
-        keyExtractor={(item, index) => index.toString()}
-        style={styles.bannerContainer}
-      />
+      {/* Carrusel de Banners de Firebase */}
+      {loadingBanners ? (
+        <ActivityIndicator style={styles.bannerLoading} color="#16222b" />
+      ) : (
+        <View style={styles.bannerContainer}>
+          <FlatList
+            ref={flatListRef}
+            data={bannersFromFirebase}
+            horizontal
+            pagingEnabled // Permite el desplazamiento por páginas completas
+            showsHorizontalScrollIndicator={false}
+            renderItem={renderBannerItem}
+            keyExtractor={(item) => item.id}
+            style={styles.bannerList}
+            onViewableItemsChanged={({ viewableItems }) => {
+              if (viewableItems.length > 0) {
+                setCurrentIndex(viewableItems[0].index);
+              }
+            }}
+            viewabilityConfig={{
+              itemVisiblePercentThreshold: 50, // Considera un item visible si al menos el 50% está en la pantalla
+            }}
+          />
+          {/* Indicadores de Página */}
+          <View style={styles.pagination}>
+            {bannersFromFirebase.map((_, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.paginationDot,
+                  index === currentIndex ? styles.paginationDotActive : null,
+                ]}
+              />
+            ))}
+          </View>
+        </View>
+      )}
 
-      {/* Productos */}
-      <FlatList
-        data={filtered}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.productList}
-        numColumns={2}
-      />
+      {/* Indicador de Carga de Productos */}
+      {loading && products.length === 0 ? (
+        <ActivityIndicator size="large" color="#16222b" style={{ marginTop: 20 }} />
+      ) : null}
+
+      {/* Mensaje si no hay productos disponibles o no hay resultados de búsqueda */}
+      {!loading && filtered.length === 0 ? (
+        <Text style={styles.noResultsText}>
+          {products.length === 0 ? "No hay productos disponibles en este momento." : "No se encontraron resultados para la búsqueda."}
+        </Text>
+      ) : null}
+
+      {/* Lista de Productos */}
+      {filtered.length > 0 && (
+       <FlatList
+         data={filtered}
+         renderItem={renderProductItem}
+         keyExtractor={(item) => item.id}
+         numColumns={2}
+
+         // ======================
+         // Aquí el truco:
+         // ======================
+         // Espacio horizontal entre columnas
+         columnWrapperStyle={{
+           justifyContent: "space-between",
+           marginBottom: 16,
+         }}
+         // Padding general para que no toquen los bordes de la pantalla
+         contentContainerStyle={{
+           paddingHorizontal: 16,
+           paddingBottom: 20,
+         }}
+       />
+     )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f4f6f8", paddingTop: 20 },
+  container: { 
+    flex: 1, 
+    backgroundColor: "#f4f6f8", 
+    paddingTop: Platform.OS === 'ios' ? 60 : 50,
+   },
   search: {
     marginHorizontal: 16,
     padding: 10,
@@ -89,32 +238,46 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginBottom: 10,
     backgroundColor: "#fff",
+    fontSize: 16,
   },
-  bannerContainer: { height: 180, marginBottom: 20 },
-  banner: {
-    width: 300,
-    height: 180,
-    marginHorizontal: 8,
-    borderRadius: 12,
+  bannerContainer: {
+    height: 120, // Reduje la altura del contenedor a 120 (puedes ajustar este valor)
+    marginBottom: 20,
   },
-  productList: {
-    paddingHorizontal: 10,
-    paddingBottom: 20,
+  bannerList: { width: screenWidth },
+  bannerItem: { width: screenWidth },
+  bannerImage: {
+    width: '100%',
+    height: 120, // La altura de la imagen ahora coincide con la del contenedor (puedes ajustarla)
+    resizeMode: 'cover',
   },
-  card: {
-    backgroundColor: "#fff",
-    flex: 1,
-    margin: 8,
-    borderRadius: 10,
-    padding: 10,
-    alignItems: "center",
+  bannerLoading: {
+    height: 120, // Ajusta la altura del indicador de carga también
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
   },
-  image: {
-    width: "100%",
-    height: 100,
-    borderRadius: 8,
-    marginBottom: 10,
+  pagination: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 10,
   },
-  title: { fontWeight: "bold", fontSize: 16 },
-  price: { color: "#888", marginTop: 4 },
+  paginationDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#ccc',
+    marginHorizontal: 5,
+  },
+  paginationDotActive: {
+    backgroundColor: '#16222b',
+  },
+  
+  noResultsText: {
+    textAlign: 'center',
+    marginTop: 20,
+    fontSize: 18,
+    color: '#888',
+  }
 });
