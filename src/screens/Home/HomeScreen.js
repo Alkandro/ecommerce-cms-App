@@ -94,9 +94,20 @@ export default function HomeScreen({ navigation }) {
 
   useEffect(() => {
     console.log("Search text changed:", search);
-    const filteredData = products.filter((p) =>
-      p.name && typeof p.name === 'string' && p.name.toLowerCase().includes(search.toLowerCase())
-    );
+    const lowerCaseSearch = search.toLowerCase(); // Convertir a minúsculas para una búsqueda insensible a mayúsculas
+
+    const filteredData = products.filter((p) => {
+      // Verificar si el nombre del producto incluye el texto de búsqueda
+      const nameMatch = p.name && typeof p.name === 'string' && p.name.toLowerCase().includes(lowerCaseSearch);
+
+      // Verificar si alguna de las etiquetas incluye el texto de búsqueda
+      const tagsMatch = p.tags && Array.isArray(p.tags) && p.tags.some(tag =>
+        typeof tag === 'string' && tag.toLowerCase().includes(lowerCaseSearch)
+      );
+
+      // El producto se incluye en los resultados filtrados si coincide con el nombre o con alguna etiqueta
+      return nameMatch || tagsMatch;
+    });
     setFiltered(filteredData);
   }, [search, products]);
 
