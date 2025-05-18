@@ -1,4 +1,3 @@
-// src/components/BannerCarousel.js
 import React, { useEffect, useRef, useState } from "react";
 import {
   View,
@@ -65,10 +64,10 @@ export function BannerCarousel({ data = [], onPressItem }) {
 }
 
 const styles = StyleSheet.create({
-  container: { height: 120, marginBottom: 20 },
+  container: { height: 180, marginBottom: 5 },
   slide: { width: SCREEN_WIDTH },
-  image: { width: "100%", height: 120, resizeMode: "cover" },
-  pagination: { flexDirection: "row", justifyContent: "center", marginTop: 8 },
+  image: { width: "100%", height: 130, resizeMode: "cover" },
+  pagination: { flexDirection: "row", justifyContent: "center", marginBottom: 30 }, // Reducido el marginTop
   dot: {
     width: 8,
     height: 8,
