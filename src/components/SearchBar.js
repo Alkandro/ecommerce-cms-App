@@ -33,7 +33,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginBottom: 10,
     backgroundColor: "#fff",
-    
+    height:Platform.OS === "ios" ? 44 : 44,
     marginTop: Platform.OS === "ios" ? -45 : -45,
     width: Platform.OS === "ios" ? 245 : 225,
     marginLeft: Platform.OS === "ios" ? 50 : 50,

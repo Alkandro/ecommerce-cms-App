@@ -1,0 +1,393 @@
+// src/screens/Profile/EditAddressScreen.js
+import React, { useState, useEffect } from "react";
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  ScrollView, 
+  TextInput,
+  ActivityIndicator,
+  Alert,
+  Switch
+} from "react-native";
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { collection, addDoc, updateDoc, doc, serverTimestamp } from "firebase/firestore";
+import { db } from "../../firebase/firebaseConfig";
+import { useAuth } from "../../context/AuthContext";
+import { createUserAddress } from "../../models/userModel";
+
+export default function EditAddressScreen() {
+  const navigation = useNavigation();
+  const route = useRoute();
+  const { user } = useAuth();
+  
+  // Obtener parámetros de la ruta
+  const { mode = "add", address = null } = route.params || {};
+  const isEditMode = mode === "edit";
+  
+  // Estados para los campos del formulario
+  const [alias, setAlias] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [street, setStreet] = useState("");
+  const [apartment, setApartment] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [zipCode, setZipCode] = useState("");
+  const [country, setCountry] = useState("");
+  const [isDefault, setIsDefault] = useState(false);
+  
+  // Estado de carga
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  // Cargar datos si estamos en modo edición
+  useEffect(() => {
+    if (isEditMode && address) {
+      setAlias(address.alias || "");
+      setFullName(address.fullName || "");
+      setPhoneNumber(address.phoneNumber || "");
+      setStreet(address.street || "");
+      setApartment(address.apartment || "");
+      setCity(address.city || "");
+      setState(address.state || "");
+      setZipCode(address.zipCode || "");
+      setCountry(address.country || "");
+      setIsDefault(address.isDefault || false);
+    }
+  }, [isEditMode, address]);
+
+  // Validación del formulario
+  const validateForm = () => {
+    if (!alias.trim()) {
+      setError("Por favor ingresa un nombre para esta dirección");
+      return false;
+    }
+    if (!fullName.trim()) {
+      setError("Por favor ingresa el nombre completo");
+      return false;
+    }
+    if (!phoneNumber.trim()) {
+      setError("Por favor ingresa un número de teléfono");
+      return false;
+    }
+    if (!street.trim()) {
+      setError("Por favor ingresa la calle y número");
+      return false;
+    }
+    if (!city.trim()) {
+      setError("Por favor ingresa la ciudad");
+      return false;
+    }
+    if (!state.trim()) {
+      setError("Por favor ingresa el estado o provincia");
+      return false;
+    }
+    if (!zipCode.trim()) {
+      setError("Por favor ingresa el código postal");
+      return false;
+    }
+    if (!country.trim()) {
+      setError("Por favor ingresa el país");
+      return false;
+    }
+    return true;
+  };
+
+  // Guardar dirección
+  const handleSaveAddress = async () => {
+    if (!validateForm()) return;
+    
+    setLoading(true);
+    setError("");
+    
+    try {
+      const addressData = {
+        alias,
+        fullName,
+        phoneNumber,
+        street,
+        apartment,
+        city,
+        state,
+        zipCode,
+        country,
+        isDefault,
+        updatedAt: serverTimestamp()
+      };
+      
+      if (isEditMode && address) {
+        // Actualizar dirección existente
+        await updateDoc(doc(db, "userAddresses", address.id), addressData);
+        Alert.alert(
+          "Dirección actualizada",
+          "La dirección ha sido actualizada correctamente",
+          [{ text: "OK", onPress: () => navigation.goBack() }]
+        );
+      } else {
+        // Crear nueva dirección
+        const newAddress = createUserAddress(user.uid, addressData);
+        await addDoc(collection(db, "userAddresses"), {
+          ...newAddress,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+        Alert.alert(
+          "Dirección guardada",
+          "La dirección ha sido guardada correctamente",
+          [{ text: "OK", onPress: () => navigation.goBack() }]
+        );
+      }
+    } catch (error) {
+      console.error("Error al guardar dirección:", error);
+      setError("No se pudo guardar la dirección. Inténtalo de nuevo.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBackButton = () => {
+    navigation.goBack();
+  };
+
+  return (
+    <View style={styles.container}>
+      {/* Header con título y botón de retroceso */}
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={handleBackButton}
+        >
+          <Ionicons name="chevron-back" size={28} color="#000" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>
+          {isEditMode ? "Editar dirección" : "Nueva dirección"}
+        </Text>
+        <View style={styles.headerRight} />
+      </View>
+      
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Formulario de dirección */}
+        <View style={styles.formSection}>
+          <Text style={styles.sectionTitle}>Información de la dirección</Text>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Nombre de la dirección</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Ej: Casa, Trabajo, etc."
+              value={alias}
+              onChangeText={setAlias}
+            />
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Nombre completo</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Nombre y apellido del destinatario"
+              value={fullName}
+              onChangeText={setFullName}
+            />
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Número de teléfono</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Teléfono de contacto"
+              keyboardType="phone-pad"
+              value={phoneNumber}
+              onChangeText={setPhoneNumber}
+            />
+          </View>
+        </View>
+        
+        <View style={styles.formSection}>
+          <Text style={styles.sectionTitle}>Detalles de la dirección</Text>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Calle y número</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Calle y número"
+              value={street}
+              onChangeText={setStreet}
+            />
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Apartamento, suite, etc. (opcional)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Apartamento, piso, etc."
+              value={apartment}
+              onChangeText={setApartment}
+            />
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Ciudad</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Ciudad"
+              value={city}
+              onChangeText={setCity}
+            />
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Estado/Provincia</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Estado o provincia"
+              value={state}
+              onChangeText={setState}
+            />
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Código postal</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Código postal"
+              keyboardType="number-pad"
+              value={zipCode}
+              onChangeText={setZipCode}
+            />
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>País</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="País"
+              value={country}
+              onChangeText={setCountry}
+            />
+          </View>
+        </View>
+        
+        <View style={styles.formSection}>
+          <View style={styles.switchContainer}>
+            <Text style={styles.switchLabel}>Establecer como dirección predeterminada</Text>
+            <Switch
+              value={isDefault}
+              onValueChange={setIsDefault}
+              trackColor={{ false: "#d1d1d6", true: "#4cd964" }}
+              thumbColor="#fff"
+            />
+          </View>
+        </View>
+        
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        
+        <TouchableOpacity
+          style={styles.saveButton}
+          onPress={handleSaveAddress}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.saveButtonText}>Guardar dirección</Text>
+          )}
+        </TouchableOpacity>
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  backButton: {
+    padding: 5,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  headerRight: {
+    width: 28, // Para mantener el título centrado
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+  formSection: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    color: '#16222b',
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 16,
+    marginBottom: 8,
+    color: '#444',
+  },
+  input: {
+    backgroundColor: '#f9f9f9',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+  },
+  switchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+  switchLabel: {
+    fontSize: 16,
+    color: '#444',
+    flex: 1,
+  },
+  errorText: {
+    color: '#ff3b30',
+    textAlign: 'center',
+    marginBottom: 16,
+    fontSize: 16,
+  },
+  saveButton: {
+    backgroundColor: '#16222b',
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+});

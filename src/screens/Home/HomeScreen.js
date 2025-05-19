@@ -525,6 +525,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 28,
     fontWeight: "bold",
+    marginTop:Platform.OS === "ios" ? -20 : -30,
   },
   row: {
     justifyContent: "space-between",
