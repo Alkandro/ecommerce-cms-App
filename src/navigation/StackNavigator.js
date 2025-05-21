@@ -7,6 +7,8 @@ import RegisterScreen           from "../screens/Auth/RegisterScreen";
 import TabNavigator             from "./TabNavigator";
 import ProductScreen            from "../screens/Product/ProductScreen";
 import EditProfileScreen        from "../screens/Profile/EditProfileScreen";
+import AddressesScreen from "../screens/Profile/AddressesScreen";
+import EditAddressScreen from "../screens/Profile/EditAddressScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -26,6 +28,8 @@ export default function StackNavigator() {
           <Stack.Screen name="Tabs"           component={TabNavigator} />
           <Stack.Screen name="ProductDetail"  component={ProductScreen} />
           <Stack.Screen name="EditProfileScreen" component={EditProfileScreen} />
+          <Stack.Screen name="AddressesScreen" component={AddressesScreen} />
+          <Stack.Screen name="EditAddressScreen" component={EditAddressScreen} />
         </>
       )}
     </Stack.Navigator>

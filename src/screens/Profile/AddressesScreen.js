@@ -60,11 +60,11 @@ export default function AddressesScreen() {
   }, [user]);
 
   const handleAddAddress = () => {
-    navigation.navigate("EditAddress", { mode: "add" });
+    navigation.navigate("EditAddressScreen", { mode: "add" });
   };
 
   const handleEditAddress = (address) => {
-    navigation.navigate("EditAddress", { mode: "edit", address });
+    navigation.navigate("EditAddressScreen", { mode: "edit", address });
   };
 
   const handleDeleteAddress = (addressId) => {

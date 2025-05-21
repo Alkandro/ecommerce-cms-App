@@ -9,7 +9,8 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
-  Image
+  Image,
+  Platform
 } from "react-native";
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -18,6 +19,17 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useAuth } from "../../context/AuthContext";
 import { storage } from "../../firebase/firebaseConfig";
 import * as FileSystem from 'expo-file-system';
+import { Picker } from '@react-native-picker/picker';
+import * as yup from 'yup';
+
+// Esquema de validación con Yup
+const profileSchema = yup.object().shape({
+  firstName: yup.string().required('El nombre es obligatorio'),
+  lastName: yup.string().required('El apellido es obligatorio'),
+  nickname: yup.string().required('El nickname es obligatorio'),
+  gender: yup.string().required('El género es obligatorio'),
+  phoneNumber: yup.string().required('El número de teléfono es obligatorio'),
+});
 
 export default function EditProfileScreen() {
   const navigation = useNavigation();
@@ -27,14 +39,16 @@ export default function EditProfileScreen() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [nickname, setNickname] = useState("");
+  const [gender, setGender] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [email, setEmail] = useState("");
   const [photoURL, setPhotoURL] = useState("");
   const [newPhoto, setNewPhoto] = useState(null);
   
-  // Estado de carga
+  // Estado de carga y validación
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [errors, setErrors] = useState({});
 
   // Cargar datos del perfil
   useEffect(() => {
@@ -42,11 +56,13 @@ export default function EditProfileScreen() {
       setFirstName(userProfile.firstName || "");
       setLastName(userProfile.lastName || "");
       setDisplayName(userProfile.displayName || "");
+      setNickname(userProfile.nickname || "");
+      setGender(userProfile.gender || "");
       setPhoneNumber(userProfile.phoneNumber || "");
-      setEmail(userProfile.email || "");
+      setEmail(user?.email || "");
       setPhotoURL(userProfile.photoURL || "");
     }
-  }, [userProfile]);
+  }, [userProfile, user]);
 
   // Seleccionar imagen de perfil
   const handleSelectImage = async () => {
@@ -78,42 +94,51 @@ export default function EditProfileScreen() {
   const uploadImage = async (uri) => {
     // descarga blob
     const response = await fetch(uri);
-    const blob     = await response.blob();
+    const blob = await response.blob();
   
     // referencia modular
-    const path      = `profileImages/${user.uid}/${Date.now()}`;
-    const storageRef= ref(storage, path);
+    const path = `profileImages/${user.uid}/${Date.now()}`;
+    const storageRef = ref(storage, path);
   
     // sube y obtiene URL
     await uploadBytes(storageRef, blob);
     return await getDownloadURL(storageRef);
   };
-
-  
   
   // Validación del formulario
-  const validateForm = () => {
-    if (!firstName.trim()) {
-      setError("Por favor ingresa tu nombre");
+  const validateForm = async () => {
+    try {
+      // Validar todos los campos con Yup
+      await profileSchema.validate({
+        firstName,
+        lastName,
+        nickname,
+        gender,
+        phoneNumber
+      }, { abortEarly: false });
+      
+      // Si pasa la validación, limpiar errores
+      setErrors({});
+      return true;
+    } catch (yupError) {
+      // Capturar y mostrar errores de validación
+      const newErrors = {};
+      if (yupError.inner) {
+        yupError.inner.forEach(error => {
+          newErrors[error.path] = error.message;
+        });
+      }
+      setErrors(newErrors);
       return false;
     }
-    if (!lastName.trim()) {
-      setError("Por favor ingresa tu apellido");
-      return false;
-    }
-    if (!phoneNumber.trim()) {
-      setError("Por favor ingresa tu número de teléfono");
-      return false;
-    }
-    return true;
   };
 
   // Guardar perfil
   const handleSaveProfile = async () => {
-    if (!validateForm()) return;
+    const isValid = await validateForm();
+    if (!isValid) return;
     
     setLoading(true);
-    setError("");
     
     try {
       // Datos a actualizar
@@ -121,7 +146,9 @@ export default function EditProfileScreen() {
         firstName,
         lastName,
         displayName: `${firstName} ${lastName}`,
-        phoneNumber,
+        nickname,
+        gender,
+        phoneNumber
       };
       
       // Si hay una nueva foto, subirla
@@ -143,7 +170,7 @@ export default function EditProfileScreen() {
       );
     } catch (error) {
       console.error("Error al actualizar perfil:", error);
-      setError("No se pudo actualizar el perfil. Inténtalo de nuevo.");
+      Alert.alert("Error", "No se pudo actualizar el perfil. Inténtalo de nuevo.");
     } finally {
       setLoading(false);
     }
@@ -152,6 +179,26 @@ export default function EditProfileScreen() {
   const handleBackButton = () => {
     navigation.goBack();
   };
+
+  // Componente de campo de entrada con manejo de errores
+  const InputField = ({ label, value, onChangeText, placeholder, keyboardType, editable = true, error }) => (
+    <View style={styles.inputGroup}>
+      <Text style={styles.inputLabel}>{label}</Text>
+      <TextInput
+        style={[
+          styles.input, 
+          !editable && styles.disabledInput,
+          error && styles.inputError
+        ]}
+        placeholder={placeholder}
+        value={value}
+        onChangeText={onChangeText}
+        keyboardType={keyboardType}
+        editable={editable}
+      />
+      {error && <Text style={styles.errorText}>{error}</Text>}
+    </View>
+  );
 
   return (
     <View style={styles.container}>
@@ -196,51 +243,67 @@ export default function EditProfileScreen() {
         <View style={styles.formSection}>
           <Text style={styles.sectionTitle}>Información personal</Text>
           
+          <InputField 
+            label="Nombre"
+            value={firstName}
+            onChangeText={setFirstName}
+            placeholder="Tu nombre"
+            error={errors.firstName}
+          />
+          
+          <InputField 
+            label="Apellido"
+            value={lastName}
+            onChangeText={setLastName}
+            placeholder="Tu apellido"
+            error={errors.lastName}
+          />
+          
+          <InputField 
+            label="Nickname"
+            value={nickname}
+            onChangeText={setNickname}
+            placeholder="Tu nickname"
+            error={errors.nickname}
+          />
+          
+          {/* Selector de género */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Nombre</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Tu nombre"
-              value={firstName}
-              onChangeText={setFirstName}
-            />
+            <Text style={styles.inputLabel}>Género</Text>
+            <View style={[
+              styles.pickerContainer, 
+              errors.gender && styles.inputError
+            ]}>
+              <Picker
+                selectedValue={gender}
+                onValueChange={(itemValue) => setGender(itemValue)}
+                style={styles.picker}
+              >
+                <Picker.Item label="Selecciona tu género" value="" />
+                <Picker.Item label="Masculino" value="masculino" />
+                <Picker.Item label="Femenino" value="femenino" />
+                <Picker.Item label="Prefiero no decir" value="no_especificado" />
+              </Picker>
+            </View>
+            {errors.gender && <Text style={styles.errorText}>{errors.gender}</Text>}
           </View>
           
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Apellido</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Tu apellido"
-              value={lastName}
-              onChangeText={setLastName}
-            />
-          </View>
+          <InputField 
+            label="Número de teléfono"
+            value={phoneNumber}
+            onChangeText={setPhoneNumber}
+            placeholder="Tu número de teléfono"
+            keyboardType="phone-pad"
+            error={errors.phoneNumber}
+          />
           
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Número de teléfono</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Tu número de teléfono"
-              keyboardType="phone-pad"
-              value={phoneNumber}
-              onChangeText={setPhoneNumber}
-            />
-          </View>
-          
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Correo electrónico</Text>
-            <TextInput
-              style={[styles.input, styles.disabledInput]}
-              value={email}
-              editable={false}
-            />
-            <Text style={styles.helperText}>
-              El correo electrónico no se puede modificar
-            </Text>
-          </View>
+          <InputField 
+            label="Correo electrónico"
+            value={email}
+            editable={false}
+            error={errors.email}
+          />
         </View>
-        
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
         
         <TouchableOpacity
           style={styles.saveButton}
@@ -348,6 +411,9 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
   },
+  inputError: {
+    borderColor: '#ff3b30',
+  },
   disabledInput: {
     backgroundColor: '#f0f0f0',
     color: '#888',
@@ -359,9 +425,8 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: '#ff3b30',
-    textAlign: 'center',
-    marginBottom: 16,
-    fontSize: 16,
+    fontSize: 14,
+    marginTop: 4,
   },
   saveButton: {
     backgroundColor: '#16222b',
@@ -374,5 +439,16 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
-   },
+  },
+  pickerContainer: {
+    backgroundColor: '#f9f9f9',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  picker: {
+    height: 50,
+    width: '100%',
+  }
 });

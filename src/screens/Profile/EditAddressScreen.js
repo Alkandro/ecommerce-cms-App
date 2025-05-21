@@ -29,7 +29,8 @@ export default function EditAddressScreen() {
   
   // Estados para los campos del formulario
   const [alias, setAlias] = useState("");
-  const [fullName, setFullName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [street, setStreet] = useState("");
   const [apartment, setApartment] = useState("");
@@ -39,15 +40,31 @@ export default function EditAddressScreen() {
   const [country, setCountry] = useState("");
   const [isDefault, setIsDefault] = useState(false);
   
-  // Estado de carga
+  // Estado de carga y autocompletado
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
 
   // Cargar datos si estamos en modo edición
   useEffect(() => {
     if (isEditMode && address) {
       setAlias(address.alias || "");
-      setFullName(address.fullName || "");
+      
+      // Si existe fullName, intentar separarlo en nombre y apellido
+      if (address.fullName) {
+        const nameParts = address.fullName.split(' ');
+        if (nameParts.length > 1) {
+          setFirstName(nameParts[0] || "");
+          setLastName(nameParts.slice(1).join(' ') || "");
+        } else {
+          setFirstName(address.fullName || "");
+        }
+      } else {
+        // Si ya existen campos separados, usarlos
+        setFirstName(address.firstName || "");
+        setLastName(address.lastName || "");
+      }
+      
       setPhoneNumber(address.phoneNumber || "");
       setStreet(address.street || "");
       setApartment(address.apartment || "");
@@ -59,14 +76,56 @@ export default function EditAddressScreen() {
     }
   }, [isEditMode, address]);
 
+  // Buscar dirección por código postal
+  const searchAddressByPostalCode = async () => {
+    if (!zipCode || zipCode.length < 3) {
+      setError("Por favor ingresa un código postal válido");
+      return;
+    }
+    
+    setIsSearchingAddress(true);
+    setError("");
+    
+    try {
+      // Llamada a la API del correo japonés
+      const response = await fetch(`https://zipcloud.ibsnet.co.jp/api/search?zipcode=${zipCode}`);
+      const data = await response.json();
+      
+      if (data.status === 200 && data.results && data.results.length > 0) {
+        const addressData = data.results[0];
+        
+        // Actualizar los campos de dirección
+        setState(addressData.address1 || "");
+        setCity(addressData.address2 || "");
+        
+        // Mostrar mensaje de éxito
+        Alert.alert(
+          "Dirección encontrada",
+          "Se ha completado la información de la dirección automáticamente."
+        );
+      } else {
+        setError("No se encontró dirección para este código postal");
+      }
+    } catch (error) {
+      console.error("Error al buscar dirección:", error);
+      setError("Error al buscar la dirección. Inténtalo de nuevo.");
+    } finally {
+      setIsSearchingAddress(false);
+    }
+  };
+
   // Validación del formulario
   const validateForm = () => {
     if (!alias.trim()) {
       setError("Por favor ingresa un nombre para esta dirección");
       return false;
     }
-    if (!fullName.trim()) {
-      setError("Por favor ingresa el nombre completo");
+    if (!firstName.trim()) {
+      setError("Por favor ingresa el nombre");
+      return false;
+    }
+    if (!lastName.trim()) {
+      setError("Por favor ingresa el apellido");
       return false;
     }
     if (!phoneNumber.trim()) {
@@ -106,7 +165,9 @@ export default function EditAddressScreen() {
     try {
       const addressData = {
         alias,
-        fullName,
+        firstName,
+        lastName,
+        fullName: `${firstName} ${lastName}`, // Mantener para compatibilidad
         phoneNumber,
         street,
         apartment,
@@ -188,12 +249,22 @@ export default function EditAddressScreen() {
           </View>
           
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Nombre completo</Text>
+            <Text style={styles.inputLabel}>Nombre</Text>
             <TextInput
               style={styles.input}
-              placeholder="Nombre y apellido del destinatario"
-              value={fullName}
-              onChangeText={setFullName}
+              placeholder="Nombre del destinatario"
+              value={firstName}
+              onChangeText={setFirstName}
+            />
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Apellido</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Apellido del destinatario"
+              value={lastName}
+              onChangeText={setLastName}
             />
           </View>
           
@@ -212,6 +283,54 @@ export default function EditAddressScreen() {
         <View style={styles.formSection}>
           <Text style={styles.sectionTitle}>Detalles de la dirección</Text>
           
+          {/* Código postal con botón de búsqueda */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Código postal</Text>
+            <View style={styles.postalCodeContainer}>
+              <TextInput
+                style={[styles.input, styles.postalCodeInput]}
+                placeholder="Código postal"
+                keyboardType="number-pad"
+                value={zipCode}
+                onChangeText={setZipCode}
+              />
+              <TouchableOpacity 
+                style={styles.searchButton}
+                onPress={searchAddressByPostalCode}
+                disabled={isSearchingAddress}
+              >
+                {isSearchingAddress ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.searchButtonText}>Buscar</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.helperText}>
+              Ingresa el código postal y presiona "Buscar" para autocompletar la dirección
+            </Text>
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Estado/Provincia</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Estado o provincia"
+              value={state}
+              onChangeText={setState}
+            />
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Ciudad</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Ciudad"
+              value={city}
+              onChangeText={setCity}
+            />
+          </View>
+          
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Calle y número</Text>
             <TextInput
@@ -229,37 +348,6 @@ export default function EditAddressScreen() {
               placeholder="Apartamento, piso, etc."
               value={apartment}
               onChangeText={setApartment}
-            />
-          </View>
-          
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Ciudad</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Ciudad"
-              value={city}
-              onChangeText={setCity}
-            />
-          </View>
-          
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Estado/Provincia</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Estado o provincia"
-              value={state}
-              onChangeText={setState}
-            />
-          </View>
-          
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Código postal</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Código postal"
-              keyboardType="number-pad"
-              value={zipCode}
-              onChangeText={setZipCode}
             />
           </View>
           
@@ -360,6 +448,32 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
+  },
+  postalCodeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  postalCodeInput: {
+    flex: 1,
+    marginRight: 8,
+  },
+  searchButton: {
+    backgroundColor: '#16222b',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  helperText: {
+    fontSize: 14,
+    color: '#888',
+    marginTop: 4,
   },
   switchContainer: {
     flexDirection: 'row',

@@ -57,7 +57,7 @@ export default function SettingsScreen() {
       id: 'addresses',
       title: 'Direcciones de Envío',
       icon: 'location-outline',
-      onPress: () => navigation.navigate('Addresses'),
+      onPress: () => navigation.navigate('AddressesScreen'),
       badge: addressCount > 0 ? addressCount : null
     },
     {
@@ -99,7 +99,7 @@ export default function SettingsScreen() {
   ];
 
   const handleEditProfile = () => {
-    navigation.navigate('EditProfile');
+    navigation.navigate('EditProfileScreen');  
   };
 
   const handleBackButton = () => {
