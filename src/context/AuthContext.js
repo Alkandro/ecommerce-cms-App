@@ -9,6 +9,8 @@ import {
 } from 'firebase/auth';
 import { auth } from '../firebase/firebaseConfig';
 import { userProfileService } from '../services/firestoreService';
+import { doc, updateDoc } from 'firebase/firestore'; // Import doc and updateDoc
+import { db } from '../firebase/firebaseConfig'; // Import db
 
 const AuthContext = createContext();
 
@@ -73,6 +75,17 @@ export function AuthProvider({ children }) {
 
   // Cerrar sesión
   const signOut = async () => {
+    if (user && user.uid) {
+      try {
+        const userRef = doc(db, 'users', user.uid);
+        await updateDoc(userRef, {
+          updatedAt: new Date(0), // Set updatedAt to a past date
+        });
+        console.log('updatedAt set to past date on logout');
+      } catch (error) {
+        console.error('Error updating updatedAt on sign out:', error);
+      }
+    }
     try {
       await firebaseSignOut(auth);
     } catch (error) {

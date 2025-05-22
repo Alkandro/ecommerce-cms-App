@@ -1,11 +1,12 @@
 // src/screens/Profile/EditProfileScreen.js
-import React, { useState, useEffect } from "react";
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  ScrollView, 
+
+import React, { useState, useEffect, memo } from "react"; // Importa 'memo'
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
   TextInput,
   ActivityIndicator,
   Alert,
@@ -22,6 +23,29 @@ import * as FileSystem from 'expo-file-system';
 import { Picker } from '@react-native-picker/picker';
 import * as yup from 'yup';
 
+// --- NUEVO: Componente InputField separado y memorizado ---
+const InputField = memo(({ label, value, onChangeText, placeholder, keyboardType, editable = true, error }) => (
+  <View style={styles.inputGroup}>
+    <Text style={styles.inputLabel}>{label}</Text>
+    <TextInput
+      style={[
+        styles.input,
+        !editable && styles.disabledInput,
+        error && styles.inputError
+      ]}
+      placeholder={placeholder}
+      value={value}
+      onChangeText={onChangeText}
+      keyboardType={keyboardType}
+      editable={editable}
+      autoCapitalize="none" // Añadido para evitar problemas de capitalización automática
+      autoCorrect={false} // Añadido para evitar autocorrección
+    />
+    {error && <Text style={styles.errorText}>{error}</Text>}
+  </View>
+));
+// --- FIN NUEVO COMPONENTE ---
+
 // Esquema de validación con Yup
 const profileSchema = yup.object().shape({
   firstName: yup.string().required('El nombre es obligatorio'),
@@ -34,18 +58,18 @@ const profileSchema = yup.object().shape({
 export default function EditProfileScreen() {
   const navigation = useNavigation();
   const { user, userProfile, updateProfile, refreshUserProfile } = useAuth();
-  
+
   // Estados para los campos del formulario
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [displayName, setDisplayName] = useState("");
+  const [displayName, setDisplayName] = useState(""); // Este campo no se usa directamente en los TextInput, pero se mantiene si lo usas en otro lugar
   const [nickname, setNickname] = useState("");
   const [gender, setGender] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [email, setEmail] = useState("");
   const [photoURL, setPhotoURL] = useState("");
   const [newPhoto, setNewPhoto] = useState(null);
-  
+
   // Estado de carga y validación
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -55,6 +79,7 @@ export default function EditProfileScreen() {
     if (userProfile) {
       setFirstName(userProfile.firstName || "");
       setLastName(userProfile.lastName || "");
+      // Si displayName es tu nombre completo y nickname es diferente, ajusta:
       setDisplayName(userProfile.displayName || "");
       setNickname(userProfile.nickname || "");
       setGender(userProfile.gender || "");
@@ -68,19 +93,19 @@ export default function EditProfileScreen() {
   const handleSelectImage = async () => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
+
       if (!permissionResult.granted) {
         Alert.alert("Permiso denegado", "Necesitamos permiso para acceder a tus fotos");
         return;
       }
-      
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
       });
-      
+
       if (!result.canceled && result.assets && result.assets.length > 0) {
         setNewPhoto(result.assets[0].uri);
       }
@@ -95,16 +120,16 @@ export default function EditProfileScreen() {
     // descarga blob
     const response = await fetch(uri);
     const blob = await response.blob();
-  
+
     // referencia modular
     const path = `profileImages/${user.uid}/${Date.now()}`;
     const storageRef = ref(storage, path);
-  
+
     // sube y obtiene URL
     await uploadBytes(storageRef, blob);
     return await getDownloadURL(storageRef);
   };
-  
+
   // Validación del formulario
   const validateForm = async () => {
     try {
@@ -116,7 +141,7 @@ export default function EditProfileScreen() {
         gender,
         phoneNumber
       }, { abortEarly: false });
-      
+
       // Si pasa la validación, limpiar errores
       setErrors({});
       return true;
@@ -137,32 +162,33 @@ export default function EditProfileScreen() {
   const handleSaveProfile = async () => {
     const isValid = await validateForm();
     if (!isValid) return;
-    
+
     setLoading(true);
-    
+
     try {
       // Datos a actualizar
       const updatedData = {
         firstName,
         lastName,
+        // Usar firstName y lastName para construir displayName
         displayName: `${firstName} ${lastName}`,
-        nickname,
+        nickname, // Asegúrate de que este es el campo correcto para tu DB
         gender,
         phoneNumber
       };
-      
+
       // Si hay una nueva foto, subirla
       if (newPhoto) {
         const photoURL = await uploadImage(newPhoto);
         updatedData.photoURL = photoURL;
       }
-      
+
       // Actualizar perfil
       await updateProfile(updatedData);
-      
+
       // Refrescar datos del perfil
       await refreshUserProfile();
-      
+
       Alert.alert(
         "Perfil actualizado",
         "Tu información ha sido actualizada correctamente",
@@ -180,32 +206,12 @@ export default function EditProfileScreen() {
     navigation.goBack();
   };
 
-  // Componente de campo de entrada con manejo de errores
-  const InputField = ({ label, value, onChangeText, placeholder, keyboardType, editable = true, error }) => (
-    <View style={styles.inputGroup}>
-      <Text style={styles.inputLabel}>{label}</Text>
-      <TextInput
-        style={[
-          styles.input, 
-          !editable && styles.disabledInput,
-          error && styles.inputError
-        ]}
-        placeholder={placeholder}
-        value={value}
-        onChangeText={onChangeText}
-        keyboardType={keyboardType}
-        editable={editable}
-      />
-      {error && <Text style={styles.errorText}>{error}</Text>}
-    </View>
-  );
-
   return (
     <View style={styles.container}>
       {/* Header con título y botón de retroceso */}
       <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton} 
+        <TouchableOpacity
+          style={styles.backButton}
           onPress={handleBackButton}
         >
           <Ionicons name="chevron-back" size={28} color="#000" />
@@ -213,22 +219,22 @@ export default function EditProfileScreen() {
         <Text style={styles.headerTitle}>Editar Perfil</Text>
         <View style={styles.headerRight} />
       </View>
-      
-      <ScrollView 
+
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         {/* Foto de perfil */}
         <View style={styles.photoContainer}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.photoWrapper}
             onPress={handleSelectImage}
           >
-            <Image 
-              source={{ 
-                uri: newPhoto || photoURL || "https://via.placeholder.com/150" 
-              }} 
+            <Image
+              source={{
+                uri: newPhoto || photoURL || "https://via.placeholder.com/150"
+              }}
               style={styles.profilePhoto}
               // defaultSource={require('../../assets/default-avatar.png')}
             />
@@ -238,40 +244,40 @@ export default function EditProfileScreen() {
           </TouchableOpacity>
           <Text style={styles.changePhotoText}>Cambiar foto</Text>
         </View>
-        
+
         {/* Formulario de perfil */}
         <View style={styles.formSection}>
           <Text style={styles.sectionTitle}>Información personal</Text>
-          
-          <InputField 
+
+          <InputField
             label="Nombre"
             value={firstName}
             onChangeText={setFirstName}
             placeholder="Tu nombre"
             error={errors.firstName}
           />
-          
-          <InputField 
+
+          <InputField
             label="Apellido"
             value={lastName}
             onChangeText={setLastName}
             placeholder="Tu apellido"
             error={errors.lastName}
           />
-          
-          <InputField 
+
+          <InputField
             label="Nickname"
             value={nickname}
             onChangeText={setNickname}
             placeholder="Tu nickname"
             error={errors.nickname}
           />
-          
+
           {/* Selector de género */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Género</Text>
             <View style={[
-              styles.pickerContainer, 
+              styles.pickerContainer,
               errors.gender && styles.inputError
             ]}>
               <Picker
@@ -287,8 +293,8 @@ export default function EditProfileScreen() {
             </View>
             {errors.gender && <Text style={styles.errorText}>{errors.gender}</Text>}
           </View>
-          
-          <InputField 
+
+          <InputField
             label="Número de teléfono"
             value={phoneNumber}
             onChangeText={setPhoneNumber}
@@ -296,15 +302,15 @@ export default function EditProfileScreen() {
             keyboardType="phone-pad"
             error={errors.phoneNumber}
           />
-          
-          <InputField 
+
+          <InputField
             label="Correo electrónico"
             value={email}
             editable={false}
             error={errors.email}
           />
         </View>
-        
+
         <TouchableOpacity
           style={styles.saveButton}
           onPress={handleSaveProfile}
