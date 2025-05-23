@@ -13,6 +13,7 @@ import {
   Image,
   Platform
 } from "react-native";
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
@@ -209,6 +210,7 @@ export default function EditProfileScreen() {
   return (
     <View style={styles.container}>
       {/* Header con título y botón de retroceso */}
+      <SafeAreaView style={styles.headerSafe}> 
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -219,7 +221,7 @@ export default function EditProfileScreen() {
         <Text style={styles.headerTitle}>Editar Perfil</Text>
         <View style={styles.headerRight} />
       </View>
-
+      </SafeAreaView>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -283,7 +285,9 @@ export default function EditProfileScreen() {
               <Picker
                 selectedValue={gender}
                 onValueChange={(itemValue) => setGender(itemValue)}
+                mode={Platform.OS === "android" ? "dropdown" : undefined}
                 style={styles.picker}
+               
               >
                 <Picker.Item label="Selecciona tu género" value="" />
                 <Picker.Item label="Masculino" value="masculino" />
@@ -330,6 +334,9 @@ export default function EditProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#fff',
+  },
+  headerSafe: {
     backgroundColor: '#fff',
   },
   header: {
@@ -448,13 +455,16 @@ const styles = StyleSheet.create({
   },
   pickerContainer: {
     backgroundColor: '#f9f9f9',
-    borderWidth: 1,
+    borderWidth: 3,
     borderColor: '#e0e0e0',
     borderRadius: 8,
     overflow: 'hidden',
+ 
   },
   picker: {
-    height: 50,
+    height: Platform.OS === "ios" ? 180 : 60,
+   
     width: '100%',
+   
   }
 });
