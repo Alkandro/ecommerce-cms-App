@@ -30,6 +30,7 @@ export default function AddressesScreen() {
 
   // Cargar direcciones del usuario
   useEffect(() => {
+    console.log("AddressesScreen useEffect: user.uid es", user?.uid);
     if (!user?.uid) return;
 
     const loadAddresses = async () => {

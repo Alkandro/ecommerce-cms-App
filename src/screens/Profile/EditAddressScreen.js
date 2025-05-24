@@ -1,11 +1,11 @@
 // src/screens/Profile/EditAddressScreen.js
 import React, { useState, useEffect } from "react";
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  ScrollView, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
   TextInput,
   ActivityIndicator,
   Alert,
@@ -21,12 +21,12 @@ import { createUserAddress } from "../../models/userModel";
 export default function EditAddressScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { user } = useAuth();
-  
+  const { user } = useAuth(); // Obtén el objeto user del contexto de autenticación
+
   // Obtener parámetros de la ruta
   const { mode = "add", address = null } = route.params || {};
   const isEditMode = mode === "edit";
-  
+
   // Estados para los campos del formulario
   const [alias, setAlias] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -39,7 +39,7 @@ export default function EditAddressScreen() {
   const [zipCode, setZipCode] = useState("");
   const [country, setCountry] = useState("");
   const [isDefault, setIsDefault] = useState(false);
-  
+
   // Estado de carga y autocompletado
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -49,7 +49,7 @@ export default function EditAddressScreen() {
   useEffect(() => {
     if (isEditMode && address) {
       setAlias(address.alias || "");
-      
+
       // Si existe fullName, intentar separarlo en nombre y apellido
       if (address.fullName) {
         const nameParts = address.fullName.split(' ');
@@ -64,7 +64,7 @@ export default function EditAddressScreen() {
         setFirstName(address.firstName || "");
         setLastName(address.lastName || "");
       }
-      
+
       setPhoneNumber(address.phoneNumber || "");
       setStreet(address.street || "");
       setApartment(address.apartment || "");
@@ -82,22 +82,22 @@ export default function EditAddressScreen() {
       setError("Por favor ingresa un código postal válido");
       return;
     }
-    
+
     setIsSearchingAddress(true);
     setError("");
-    
+
     try {
       // Llamada a la API del correo japonés
       const response = await fetch(`https://zipcloud.ibsnet.co.jp/api/search?zipcode=${zipCode}`);
       const data = await response.json();
-      
+
       if (data.status === 200 && data.results && data.results.length > 0) {
         const addressData = data.results[0];
-        
+
         // Actualizar los campos de dirección
         setState(addressData.address1 || "");
         setCity(addressData.address2 || "");
-        
+
         // Mostrar mensaje de éxito
         Alert.alert(
           "Dirección encontrada",
@@ -157,11 +157,21 @@ export default function EditAddressScreen() {
 
   // Guardar dirección
   const handleSaveAddress = async () => {
-    if (!validateForm()) return;
-    
+    // 1. Verifica si el usuario está autenticado y tiene un UID
+    if (!user || !user.uid) {
+      Alert.alert(
+        "Error de autenticación",
+        "No se pudo identificar al usuario para guardar la dirección. Por favor, inicia sesión de nuevo."
+      );
+      console.error("Error: user.uid es nulo o indefinido al intentar guardar la dirección.");
+      return;
+    }
+
+    if (!validateForm()) return; // Si la validación falla, sale de la función
+
     setLoading(true);
-    setError("");
-    
+    setError(""); // Limpia cualquier error anterior
+
     try {
       const addressData = {
         alias,
@@ -176,11 +186,14 @@ export default function EditAddressScreen() {
         zipCode,
         country,
         isDefault,
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp() // Se usa para la actualización también
       };
-      
+
       if (isEditMode && address) {
-        // Actualizar dirección existente
+        // En modo edición, el 'userId' ya debería existir en el documento de Firebase.
+        // Solo actualizamos los campos. La regla de seguridad verifica que el 'userId'
+        // del documento existente coincida con el usuario actual.
+        console.log("Editando dirección con ID:", address.id, "para UID:", user.uid);
         await updateDoc(doc(db, "userAddresses", address.id), addressData);
         Alert.alert(
           "Dirección actualizada",
@@ -188,22 +201,30 @@ export default function EditAddressScreen() {
           [{ text: "OK", onPress: () => navigation.goBack() }]
         );
       } else {
-        // Crear nueva dirección
-        const newAddress = createUserAddress(user.uid, addressData);
-        await addDoc(collection(db, "userAddresses"), {
-          ...newAddress,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        });
+        // En modo creación, usamos createUserAddress para asegurar que 'userId' se incluya.
+        const newAddressDocData = createUserAddress(user.uid, addressData);
+        // Firebase Timestamp se añade por separado para createdAt y updatedAt
+        newAddressDocData.createdAt = serverTimestamp();
+        newAddressDocData.updatedAt = serverTimestamp();
+
+        console.log("Creando nueva dirección para UID:", user.uid);
+        console.log("Datos que se enviarán:", newAddressDocData);
+
+        await addDoc(collection(db, "userAddresses"), newAddressDocData);
         Alert.alert(
           "Dirección guardada",
           "La dirección ha sido guardada correctamente",
           [{ text: "OK", onPress: () => navigation.goBack() }]
         );
       }
-    } catch (error) {
-      console.error("Error al guardar dirección:", error);
-      setError("No se pudo guardar la dirección. Inténtalo de nuevo.");
+    } catch (e) { // Cambié 'error' a 'e' para evitar confusión con el estado 'error'
+      console.error("Error al guardar dirección:", e);
+      // Aquí podrías parsear el error de Firebase para mensajes más específicos
+      if (e.code === 'permission-denied' || e.message.includes('permissions')) {
+         setError("Error: Permisos insuficientes. Asegúrate de que estás logueado y tus reglas de Firestore permiten esta operación.");
+      } else {
+         setError("No se pudo guardar la dirección. Inténtalo de nuevo.");
+      }
     } finally {
       setLoading(false);
     }
@@ -217,8 +238,8 @@ export default function EditAddressScreen() {
     <View style={styles.container}>
       {/* Header con título y botón de retroceso */}
       <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton} 
+        <TouchableOpacity
+          style={styles.backButton}
           onPress={handleBackButton}
         >
           <Ionicons name="chevron-back" size={28} color="#000" />
@@ -228,8 +249,8 @@ export default function EditAddressScreen() {
         </Text>
         <View style={styles.headerRight} />
       </View>
-      
-      <ScrollView 
+
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -237,7 +258,7 @@ export default function EditAddressScreen() {
         {/* Formulario de dirección */}
         <View style={styles.formSection}>
           <Text style={styles.sectionTitle}>Información de la dirección</Text>
-          
+
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Nombre de la dirección</Text>
             <TextInput
@@ -247,7 +268,7 @@ export default function EditAddressScreen() {
               onChangeText={setAlias}
             />
           </View>
-          
+
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Nombre</Text>
             <TextInput
@@ -257,7 +278,7 @@ export default function EditAddressScreen() {
               onChangeText={setFirstName}
             />
           </View>
-          
+
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Apellido</Text>
             <TextInput
@@ -267,7 +288,7 @@ export default function EditAddressScreen() {
               onChangeText={setLastName}
             />
           </View>
-          
+
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Número de teléfono</Text>
             <TextInput
@@ -279,10 +300,10 @@ export default function EditAddressScreen() {
             />
           </View>
         </View>
-        
+
         <View style={styles.formSection}>
           <Text style={styles.sectionTitle}>Detalles de la dirección</Text>
-          
+
           {/* Código postal con botón de búsqueda */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Código postal</Text>
@@ -294,7 +315,7 @@ export default function EditAddressScreen() {
                 value={zipCode}
                 onChangeText={setZipCode}
               />
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.searchButton}
                 onPress={searchAddressByPostalCode}
                 disabled={isSearchingAddress}
@@ -310,7 +331,7 @@ export default function EditAddressScreen() {
               Ingresa el código postal y presiona "Buscar" para autocompletar la dirección
             </Text>
           </View>
-          
+
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Estado/Provincia</Text>
             <TextInput
@@ -320,7 +341,7 @@ export default function EditAddressScreen() {
               onChangeText={setState}
             />
           </View>
-          
+
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Ciudad</Text>
             <TextInput
@@ -330,7 +351,7 @@ export default function EditAddressScreen() {
               onChangeText={setCity}
             />
           </View>
-          
+
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Calle y número</Text>
             <TextInput
@@ -340,7 +361,7 @@ export default function EditAddressScreen() {
               onChangeText={setStreet}
             />
           </View>
-          
+
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Apartamento, suite, etc. (opcional)</Text>
             <TextInput
@@ -350,7 +371,7 @@ export default function EditAddressScreen() {
               onChangeText={setApartment}
             />
           </View>
-          
+
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>País</Text>
             <TextInput
@@ -361,7 +382,7 @@ export default function EditAddressScreen() {
             />
           </View>
         </View>
-        
+
         <View style={styles.formSection}>
           <View style={styles.switchContainer}>
             <Text style={styles.switchLabel}>Establecer como dirección predeterminada</Text>
@@ -373,9 +394,9 @@ export default function EditAddressScreen() {
             />
           </View>
         </View>
-        
+
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
-        
+
         <TouchableOpacity
           style={styles.saveButton}
           onPress={handleSaveAddress}

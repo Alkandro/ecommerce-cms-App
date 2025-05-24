@@ -11,24 +11,33 @@ import {
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export function BannerCarousel({ data = [], onPressItem }) {
-  const ref = useRef();
+  const ref = useRef(null); // Asegúrate de inicializar useRef con null
   const [current, setCurrent] = useState(0);
 
   // auto-scroll cada 3s
   useEffect(() => {
     if (data.length === 0) return;
+
     const iv = setInterval(() => {
       const next = (current + 1) % data.length;
       setCurrent(next);
-      ref.current.scrollToOffset({ offset: next * SCREEN_WIDTH, animated: true });
+
+      // ¡Aquí es donde debes añadir la verificación!
+      if (ref.current) { // <-- AGREGADO: Verifica si la referencia existe
+        ref.current.scrollToOffset({ offset: next * SCREEN_WIDTH, animated: true });
+      } else {
+        // Opcional: log para depuración si la referencia es null
+        console.warn("BannerCarousel: ref.current es null. No se pudo desplazar.");
+      }
     }, 3000);
+
     return () => clearInterval(iv);
   }, [current, data]);
 
   return (
     <View style={styles.container}>
       <FlatList
-        ref={ref}
+        ref={ref} // Asegúrate de que la referencia esté adjunta al FlatList
         data={data}
         horizontal
         pagingEnabled
