@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   StyleSheet,
   TouchableOpacity,
+  Dimensions // Importa Dimensions
 } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import Toast from "react-native-root-toast";
@@ -15,6 +16,12 @@ import { wishlistService } from "../../services/wishlist";
 import { useCart } from "../../context/CartContext";
 import { Ionicons } from "@expo/vector-icons";
 import { ProductCard } from "../../components/ProductCard";
+
+// Obtén el ancho de la pantalla para calcular el tamaño de las tarjetas
+const { width } = Dimensions.get("window");
+const cardMargin = 8;
+const numColumns = 2;
+const cardWidth = (width / numColumns) - (cardMargin * numColumns); // Calcula el ancho de cada tarjeta
 
 export default function WishlistScreen() {
   const { user } = useAuth();
@@ -40,7 +47,6 @@ export default function WishlistScreen() {
       const fetchedProducts = await wishlistService.getAllWishlistProducts(
         user.uid
       );
-      // AÑADE ESTA LÍNEA PARA DEPURAR
       console.log("Productos fetched de Wishlist:", fetchedProducts.map(p => p.id));
       setProducts(fetchedProducts);
     } catch (error) {
@@ -144,8 +150,9 @@ export default function WishlistScreen() {
         data={products}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
+        columnWrapperStyle={products.length === 1 ? styles.singleColumnWrapper : null}
         contentContainerStyle={styles.listContent}
-        numColumns={2}
+        numColumns={numColumns} // Define numColumns aquí
       />
     </View>
   );
@@ -157,11 +164,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#f4f6f8",
   },
   listContent: {
-    padding: 8,
+    padding: cardMargin, // Usamos el margen definido
   },
   cardWrapper: {
-    flex: 1,
-    margin: 8,
+    width: cardWidth, // Usa el ancho calculado
+    margin: cardMargin / 2, // Mitad del margen para distribuir bien entre las columnas
     position: "relative",
   },
   actionButtonsContainer: {
@@ -169,6 +176,7 @@ const styles = StyleSheet.create({
     top: 8,
     right: 8,
     flexDirection: "row",
+    zIndex: 1, // Asegura que los botones estén por encima del card
   },
   removeBtn: {
     backgroundColor: "rgba(255,255,255,0.8)",
@@ -192,5 +200,9 @@ const styles = StyleSheet.create({
     color: "#666",
     textAlign: "center",
     marginTop: 10,
+  },
+  // Nuevo estilo para cuando hay un solo producto y necesitas centrarlo
+  singleColumnWrapper: {
+    justifyContent: 'flex-start', // Centra el elemento en la fila
   },
 });

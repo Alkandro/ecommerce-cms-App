@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from "react"; // Añade useCallback
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,28 +9,34 @@ import {
   TouchableOpacity,
   Image,
   Platform,
+  Dimensions // Importa Dimensions también aquí
 } from "react-native";
 import { collection, onSnapshot, query, where, doc, getDoc } from "firebase/firestore";
 import { db } from "../../firebase/firebaseConfig";
 import { SearchBar } from "../../components/SearchBar";
 import { BannerCarousel } from "../../components/BannerCarousel";
 import { Ionicons } from "@expo/vector-icons";
-import { useAuth } from "../../context/AuthContext"; // <-- Importa tu contexto de autenticación
-import { wishlistService } from "../../services/wishlist"; // <-- Importa tu servicio de wishlist
-import Toast from "react-native-root-toast"; 
+import { useAuth } from "../../context/AuthContext";
+import { wishlistService } from "../../services/wishlist";
+import Toast from "react-native-root-toast";
+import { ProductCard } from "../../components/ProductCard"; // <-- ¡Importa ProductCard!
+
+const { width } = Dimensions.get("window"); // Para calcular el ancho de los cards
+const homeCardMargin = 5; // Margen para los cards de Home
+const homeNumColumns = 2;
+const homeCardWidth = (width / homeNumColumns) - (homeCardMargin * homeNumColumns * 2); // Ajuste para 2 columnas con margen
+
 
 export default function HomeScreen({ navigation }) {
-  const { user } = useAuth(); // <-- Obtén el usuario autenticado
+  const { user } = useAuth();
   const [products, setProducts] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [banners, setBanners] = useState([]);
   const [loadingBanners, setLoadingBanners] = useState(true);
-  const [wishlistProductIds, setWishlistProductIds] = useState(new Set()); // <-- Nuevo estado para IDs de wishlist
+  const [wishlistProductIds, setWishlistProductIds] = useState(new Set());
   const searchInputRef = useRef(null);
-
-  // ... (useEffect para productos en tiempo real y banners, sin cambios) ...
 
   useEffect(() => {
     const q = query(collection(db, "products"), where("available", "==", true));
@@ -70,12 +76,10 @@ export default function HomeScreen({ navigation }) {
     return () => unsubscribeBanners();
   }, []);
 
-  // Nuevo useEffect para cargar la wishlist del usuario cuando cambie el usuario
   useEffect(() => {
-    let unsubscribeWishlist = () => {}; // Inicializar para que siempre sea una función
+    let unsubscribeWishlist = () => {};
 
     if (user) {
-      // Escuchar cambios en la wishlist en tiempo real
       const wishlistRef = collection(db, "users", user.uid, "wishlist");
       unsubscribeWishlist = onSnapshot(wishlistRef, (snapshot) => {
         const ids = new Set(snapshot.docs.map(doc => doc.id));
@@ -84,13 +88,12 @@ export default function HomeScreen({ navigation }) {
         console.error("Error cargando wishlist en tiempo real:", error);
       });
     } else {
-      setWishlistProductIds(new Set()); // Limpiar wishlist si no hay usuario
+      setWishlistProductIds(new Set());
     }
 
     return () => unsubscribeWishlist();
-  }, [user]); // Depende del objeto user
+  }, [user]);
 
-  // ... (Filtrado sin cambios) ...
   useEffect(() => {
     const txt = search.toLowerCase();
     setFiltered(
@@ -127,7 +130,6 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-  // --- MODIFICAR handleFavoritePress ---
   const handleFavoritePress = async (product) => {
     if (!user) {
       Alert.alert("Inicio de Sesión Requerido", "Debes iniciar sesión para añadir productos a tu lista de deseos.");
@@ -144,7 +146,6 @@ export default function HomeScreen({ navigation }) {
         await wishlistService.addProductToWishlist(user.uid, product.id);
         Toast.show(`${product.name} añadido a favoritos`, { position: Toast.positions.CENTER });
       }
-      // No necesitas recargar explícitamente aquí, el onSnapshot en useEffect actualizará el estado
     } catch (error) {
       console.error("Error al gestionar favoritos:", error);
       Toast.show("Error al gestionar favoritos", { position: Toast.positions.CENTER });
@@ -155,11 +156,11 @@ export default function HomeScreen({ navigation }) {
     navigation.navigate("EditProfileScreen")
   }
 
-  // Renderizado de cada producto
+  // --- MODIFICACIÓN CLAVE AQUÍ ---
   const renderProduct = ({ item }) => {
-    const isFavorite = wishlistProductIds.has(item.id); // <-- Verifica si es favorito
+    const isFavorite = wishlistProductIds.has(item.id);
     return (
-      <View style={styles.productCard}>
+      <View style={styles.productCardWrapper}> 
         <TouchableOpacity
           activeOpacity={0.9}
           onPress={() => {
@@ -167,30 +168,19 @@ export default function HomeScreen({ navigation }) {
             navigation.navigate("ProductDetail", { product: item });
           }}
         >
-          <Image source={{ uri: item.image }} style={styles.productImage} />
+          <ProductCard product={item} /> 
         </TouchableOpacity>
 
-        {/* Botón de favorito */}
+       
         <TouchableOpacity
           style={styles.favoriteButton}
-          onPress={() => handleFavoritePress(item)} // Pasa el 'item' completo
+          onPress={() => handleFavoritePress(item)}
         >
-          {/* Cambia el icono basado en si es favorito o no */}
           <Ionicons
-            name={isFavorite ? "heart" : "heart-outline"} // Corazón relleno si es favorito
+            name={isFavorite ? "heart" : "heart-outline"}
             size={24}
-            color={isFavorite ? "#e53935" : "#000"} // Color diferente si es favorito
+            color={isFavorite ? "#e53935" : "#000"}
           />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.productInfoContainer}
-          onPress={() => navigation.navigate("ProductDetail", { product: item })}
-        >
-          <Text style={styles.productName} numberOfLines={1}>
-            {item.name}
-          </Text>
-          <Text style={styles.productPrice}>${item.price}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -198,7 +188,6 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* ... (resto del JSX sin cambios, solo asegúrate de que el BannerCarousel esté correcto) ... */}
       <View style={styles.fixedHeaderContainer}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.menuButton}>
@@ -232,7 +221,7 @@ export default function HomeScreen({ navigation }) {
         data={filtered}
         renderItem={renderProduct}
         keyExtractor={(item) => item.id}
-        numColumns={2}
+        numColumns={homeNumColumns} // Usa la variable definida
         columnWrapperStyle={styles.row}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
@@ -278,7 +267,7 @@ export default function HomeScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: "#f4f6f8",
   },
   fixedHeaderContainer: {
     position: "absolute",
@@ -326,27 +315,38 @@ const styles = StyleSheet.create({
     marginTop:Platform.OS === "ios" ? -20 : -30,
   },
   row: {
-    justifyContent: "space-between",
+    justifyContent: "space-around",
     marginBottom: 16,
+    paddingHorizontal: homeCardMargin / 2, // Ajusta el padding para la fila
   },
   listContent: {
-    paddingHorizontal: 16,
     paddingBottom: 20,
     paddingTop: Platform.OS === "ios" ? 110 : 90,
   },
-  productCard: {
-    width: "48%",
+  // --- Estilo MODIFICADO para el contenedor del ProductCard ---
+  productCardWrapper: {
+    width: homeCardWidth, // Usa el ancho calculado
     marginBottom: 16,
-    borderRadius: 8,
-    backgroundColor: "#fff",
+    backgroundColor: "#fff", // Puedes agregarlo si ProductCard no tiene un fondo blanco
+    borderRadius: 10,
     overflow: "hidden",
+    marginHorizontal: homeCardMargin / 2, // Agrega margen horizontal
+    // Sombra para iOS
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4, // Aumenta la altura para una sombra más prominente
+    },
+    shadowOpacity: 0.15, // Opacidad de la sombra
+    shadowRadius: 6, // Radio de la sombra
+
+    // Sombra para Android
+    elevation: 6, // Aumenta el valor para una sombra más intensa
+    borderColor: "#e0e0e0", // Borde sutil
+    borderWidth: StyleSheet.hairlineWidth, // Un borde delgado
   },
-  productImage: {
-    width: "100%",
-    height: 150,
-    resizeMode: "cover",
-  },
-  favoriteButton: { // Ya está aquí
+ 
+  favoriteButton: {
     position: "absolute",
     top: 8,
     right: 8,
@@ -356,18 +356,7 @@ const styles = StyleSheet.create({
     height: 30,
     justifyContent: "center",
     alignItems: "center",
-  },
-  productInfoContainer: {
-    padding: 10,
-  },
-  productName: {
-    fontSize: 16,
-    fontWeight: "500",
-    marginBottom: 4,
-  },
-  productPrice: {
-    fontSize: 16,
-    fontWeight: "bold",
+    zIndex: 1, // Asegura que esté encima del card
   },
   emptyText: {
     textAlign: "center",
