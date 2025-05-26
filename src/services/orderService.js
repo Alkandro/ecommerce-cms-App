@@ -1,31 +1,55 @@
-// src/services/orderService.js
 import { 
-    collection, 
-    addDoc, 
-    doc, 
-    updateDoc, 
-    serverTimestamp 
-  } from "firebase/firestore";
-  import { db } from "../firebase/firebaseConfig";
-  
-  export const orderService = {
-    // Crea un nuevo pedido
-    createOrder: async ({ userId, items, address, paymentMethod }) => {
-      const orderData = {
-        userId,
-        items,           // array de { slug, name, price, quantity, ... }
-        address,         // objeto con dirección seleccionada
-        paymentMethod,   // e.g. "Tarjeta ****1234"
-        status: "pending",
-        createdAt: serverTimestamp(),
-      };
-      const ref = await addDoc(collection(db, "orders"), orderData);
-      return ref;
-    },
-    // Actualiza el estado de un pedido existente
-    updateOrderStatus: async (orderId, status) => {
-      const orderRef = doc(db, "orders", orderId);
-      await updateDoc(orderRef, { status });
-    },
-  };
-  
+  collection, 
+  addDoc, 
+  doc, 
+  updateDoc, 
+  serverTimestamp 
+} from "firebase/firestore";
+import { db } from "../firebase/firebaseConfig";
+
+export const orderService = {
+  // Crea un nuevo pedido
+  // Ahora incluye totalAmount y imageUrl en los items
+  createOrder: async ({ userId, userName, userEmail, items, address, paymentMethod, totalAmount }) => {
+    const orderData = {
+      userId,
+      userName, // Añadido
+      userEmail, // Añadido
+      items,           // array de { id, name, price, quantity, imageUrl }
+      address,         // objeto con dirección seleccionada
+      paymentMethod,
+      totalAmount, // Añadido
+      status: "pending",
+      createdAt: serverTimestamp(),
+      acceptedAt: null, // Inicialmente nulo
+      rejectedAt: null, // Inicialmente nulo
+      notes: "" // Inicialmente vacío
+    };
+    const ref = await addDoc(collection(db, "orders"), orderData);
+    return ref;
+  },
+  // Actualiza el estado de un pedido existente
+  updateOrderStatus: async (orderId, status) => {
+    const orderRef = doc(db, "orders", orderId);
+    // Cuando el estado cambia a 'accepted', registra la hora
+    const updateData = { status };
+    if (status === 'accepted') {
+      updateData.acceptedAt = serverTimestamp();
+    } else if (status === 'rejected') { // También si es rechazado
+      updateData.rejectedAt = serverTimestamp();
+    }
+    await updateDoc(orderRef, updateData);
+  },
+  // Opcional: Obtener todos los pedidos para el CMS (si lo construyes con React Native Web/Expo)
+  getAllOrders: async () => {
+    const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  },
+  // Opcional: Obtener pedidos por usuario
+  getUserOrders: async (userId) => {
+    const q = query(collection(db, "orders"), where("userId", "==", userId), orderBy("createdAt", "desc"));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  }
+};

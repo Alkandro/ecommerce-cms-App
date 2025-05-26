@@ -1,4 +1,3 @@
-// src/screens/Order/OrderScreen.js
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
@@ -9,57 +8,99 @@ import {
   Image,
   Button,
   Alert,
+  ActivityIndicator,
 } from "react-native";
-// Eliminamos la importación del Picker ya que no se usará
-// import { Picker } from "@react-native-picker/picker";
 import { DateTime } from "luxon";
 import { useAuth } from "../../context/AuthContext";
 import { useCart } from "../../context/CartContext";
 import { addressService } from "../../services/addressService";
 import { orderService } from "../../services/orderService";
 import { Ionicons } from "@expo/vector-icons";
+import { doc, onSnapshot } from "firebase/firestore";
+import { db } from "../../firebase/firebaseConfig";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-console.log("Valor de addressService en OrderScreen:", addressService);
+const LAST_ORDER_ID_KEY = "@lastOrderId"; // Clave para AsyncStorage
+
+// console.log("Valor de addressService en OrderScreen:", addressService); // Puedes quitar este console.log
 
 export default function OrderScreen() {
   const { user } = useAuth();
-  const {
-    cart,
-    removeFromCart,
-    updateQuantity,
-    clearCart,
-  } = useCart();
+  const { cart, removeFromCart, updateQuantity, clearCart } = useCart();
 
   const [addresses, setAddresses] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [acceptedItems, setAcceptedItems] = useState({});
-  const [orderStatus, setOrderStatus] = useState(null);
+  const [currentOrderId, setCurrentOrderId] = useState(null);
+  const [orderStatusFromDb, setOrderStatusFromDb] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [addressLoading, setAddressLoading] = useState(true);
 
-  // Cargar direcciones
+  // Cargar direcciones y último OrderId guardado
   useEffect(() => {
-    const loadAddresses = async () => {
-      if (!user?.uid) {
-        console.warn("OrderScreen: user.uid no disponible para cargar direcciones.");
-        return;
-      }
-      try {
-        const list = await addressService.getUserAddresses(user.uid);
-        setAddresses(list);
-        if (list.length > 0) {
-          const defaultAddress = list.find(addr => addr.isDefault);
-          // Establecer la dirección seleccionada automáticamente sin el Picker
-          setSelectedAddress(defaultAddress || list[0]);
+    const loadInitialData = async () => {
+      setAddressLoading(true);
+      if (user?.uid) {
+        try {
+          const list = await addressService.getUserAddresses(user.uid);
+          setAddresses(list);
+          if (list.length > 0) {
+            const defaultAddress = list.find(addr => addr.isDefault);
+            setSelectedAddress(defaultAddress || list[0]);
+          }
+        } catch (error) {
+          console.error("Error cargando direcciones en OrderScreen:", error);
+          Alert.alert("Error", "No se pudieron cargar tus direcciones. Inténtalo de nuevo.");
         }
-      } catch (error) {
-        console.error("Error cargando direcciones en OrderScreen:", error);
-        Alert.alert("Error", "No se pudieron cargar tus direcciones. Inténtalo de nuevo.");
+      }
+      setAddressLoading(false);
+
+      // Cargar el último ID de pedido desde AsyncStorage
+      try {
+        const storedOrderId = await AsyncStorage.getItem(LAST_ORDER_ID_KEY);
+        if (storedOrderId) {
+          console.log("Found stored order ID:", storedOrderId);
+          setCurrentOrderId(storedOrderId);
+        }
+      } catch (e) {
+        console.error("Failed to load last order ID from AsyncStorage", e);
       }
     };
-    loadAddresses();
+    loadInitialData();
   }, [user?.uid]);
 
-  // Asegurarse de que los productos aceptados se inicialicen correctamente
+  // Escucha el estado del pedido en tiempo real
+  useEffect(() => {
+    let unsubscribe;
+    if (currentOrderId) {
+      console.log(`Listening to order ${currentOrderId} changes.`);
+      const orderRef = doc(db, "orders", currentOrderId);
+      unsubscribe = onSnapshot(orderRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          console.log("Order data changed:", data.status, "at", data.createdAt?.toDate(), "acceptedAt", data.acceptedAt?.toDate());
+          setOrderStatusFromDb(data.status);
+        } else {
+          console.log("Order document no longer exists in DB. Clearing local state.");
+          // Si el documento ya no existe (ej. fue eliminado por el admin)
+          setOrderStatusFromDb(null);
+          setCurrentOrderId(null);
+          AsyncStorage.removeItem(LAST_ORDER_ID_KEY); // Limpiar el ID guardado
+        }
+      }, (error) => {
+        console.error("Error listening to order status:", error);
+        setOrderStatusFromDb("error");
+      });
+    }
+    return () => {
+      if (unsubscribe) {
+        console.log(`Unsubscribed from order ${currentOrderId}.`);
+        unsubscribe();
+      }
+    };
+  }, [currentOrderId]);
+
+  // Resto de useEffects y funciones (sin cambios)
   useEffect(() => {
     const initialAccepted = {};
     cart.forEach(item => {
@@ -68,11 +109,9 @@ export default function OrderScreen() {
     setAcceptedItems(initialAccepted);
   }, [cart]);
 
-  // Alternar aceptado para cada ítem
   const toggleAccept = (productId) =>
     setAcceptedItems((prev) => ({ ...prev, [productId]: !prev[productId] }));
 
-  // Función para disminuir la cantidad
   const handleDecreaseQuantity = useCallback((item) => {
     if (item.quantity - 1 <= 0) {
       removeFromCart(item.product.id);
@@ -81,18 +120,15 @@ export default function OrderScreen() {
     }
   }, [removeFromCart, updateQuantity]);
 
-  // Función para aumentar la cantidad
   const handleIncreaseQuantity = useCallback((item) => {
     updateQuantity(item.product.id, item.quantity + 1);
   }, [updateQuantity]);
 
-  // Total
   const total = cart.reduce(
     (sum, i) => sum + i.product.price * i.quantity,
     0
   );
 
-  // Confirmar pedido
   const confirmOrder = async () => {
     if (!selectedAddress) {
       Alert.alert("Elige una dirección", "Por favor, selecciona una dirección de envío antes de continuar.");
@@ -105,21 +141,33 @@ export default function OrderScreen() {
     }
     setLoading(true);
     try {
-      const items = cart.map((i) => ({
+      const itemsForOrder = cart.map((i) => ({
         id: i.product.id,
         name: i.product.name,
         price: i.product.price,
         quantity: i.quantity,
+        imageUrl: i.product.image,
       }));
+
       const paymentMethod = "Tarjeta ****1234";
+
       const ref = await orderService.createOrder({
         userId: user.uid,
-        items,
+        userName: user.displayName || user.email,
+        userEmail: user.email,
+        items: itemsForOrder,
         address: selectedAddress,
         paymentMethod,
+        totalAmount: total,
       });
-      setOrderStatus("pending");
-      clearCart(); // Usa clearCart en lugar de emptyCart
+
+      // Guardar el ID del pedido y el estado en el estado local y AsyncStorage
+      setCurrentOrderId(ref.id);
+      setOrderStatusFromDb("pending");
+      await AsyncStorage.setItem(LAST_ORDER_ID_KEY, ref.id); // Persistir el ID
+
+      clearCart(); // El carrito se vacía, pero el estado del pedido se mantiene
+
       Alert.alert("¡Pedido enviado!", "Esperando aceptación del vendedor", [
         { text: "OK", onPress: () => {} }
       ]);
@@ -131,75 +179,93 @@ export default function OrderScreen() {
     }
   };
 
+  const displayStatus = currentOrderId ? orderStatusFromDb : null; // Usa el estado de la DB si hay un pedido activo
+
   return (
     <View style={s.container}>
-      {orderStatus && (
+      {displayStatus && (
         <Text
           style={[
             s.status,
-            orderStatus === "pending" ? s.pending : s.accepted,
+            displayStatus === "pending" ? s.pending : (displayStatus === "accepted" ? s.accepted : s.rejected),
           ]}
         >
-          {orderStatus === "pending"
+          {displayStatus === "pending"
             ? "⏳ Esperando aceptación"
-            : "✅ Pedido aceptado"}
+            : displayStatus === "accepted"
+            ? "✅ Pedido aceptado"
+            : displayStatus === "rejected"
+            ? "❌ Pedido rechazado"
+            : "Estado desconocido"}
         </Text>
       )}
 
-      <FlatList
-        data={cart}
-        keyExtractor={(item) => item.product.id}
-        renderItem={({ item }) => (
-          <View style={s.row}>
-            <Image source={{ uri: item.product.image }} style={s.img} />
-            <View style={s.info}>
-              <Text style={s.name}>{item.product.name}</Text>
-              <Text>{item.product.price}€ × {item.quantity}</Text>
-            </View>
-            <View style={s.qty}>
-              <TouchableOpacity onPress={() => handleDecreaseQuantity(item)}>
-                <Text style={s.qtyBtn}>−</Text>
-              </TouchableOpacity>
-              <Text style={s.qtyText}>{item.quantity}</Text>
-              <TouchableOpacity onPress={() => handleIncreaseQuantity(item)}>
-                <Text style={s.qtyBtn}>＋</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={s.actions}>
-              <TouchableOpacity
-                style={s.deleteButton}
-                onPress={() => removeFromCart(item.product.id)}
-              >
-                <Ionicons name="trash-outline" size={22} color="#D32F2F" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => toggleAccept(item.product.id)}
-              >
-                <Text
-                  style={[
-                    s.accept,
-                    acceptedItems[item.product.id] && s.acceptedBtn,
-                  ]}
+      {/* Condición para mostrar FlatList o EmptyCartContainer */}
+      {(cart.length > 0 || currentOrderId) ? ( // Muestra FlatList si hay items en carrito O si hay un pedido en proceso
+        <FlatList
+          data={cart}
+          keyExtractor={(item) => item.product.id}
+          renderItem={({ item }) => (
+            <View style={s.row}>
+              <Image source={{ uri: item.product.image }} style={s.img} />
+              <View style={s.info}>
+                <Text style={s.name}>{item.product.name}</Text>
+                <Text>{item.product.price}€ × {item.quantity}</Text>
+              </View>
+              <View style={s.qty}>
+                <TouchableOpacity onPress={() => handleDecreaseQuantity(item)}>
+                  <Text style={s.qtyBtn}>−</Text>
+                </TouchableOpacity>
+                <Text style={s.qtyText}>{item.quantity}</Text>
+                <TouchableOpacity onPress={() => handleIncreaseQuantity(item)}>
+                  <Text style={s.qtyBtn}>＋</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={s.actions}>
+                <TouchableOpacity
+                  style={s.deleteButton}
+                  onPress={() => removeFromCart(item.product.id)}
                 >
-                  {acceptedItems[item.product.id] ? "Aceptado" : "Aceptar"}
-                </Text>
-              </TouchableOpacity>
+                  <Ionicons name="trash-outline" size={22} color="#D32F2F" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => toggleAccept(item.product.id)}
+                >
+                  <Text
+                    style={[
+                      s.accept,
+                      acceptedItems[item.product.id] && s.acceptedBtn,
+                    ]}
+                  >
+                    {acceptedItems[item.product.id] ? "Aceptado" : "Aceptar"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        )}
-        ListEmptyComponent={() => (
-          <View style={s.emptyCartContainer}>
-            <Text style={s.emptyCartText}>Tu carrito está vacío.</Text>
-            <Text style={s.emptyCartSubtext}>Agrega algunos productos para hacer un pedido.</Text>
-          </View>
-        )}
-      />
+          )}
+          ListEmptyComponent={
+            // Esto se mostrará si cart.length es 0 pero currentOrderId NO es null
+            currentOrderId && (
+              <View style={s.orderInProgressContainer}>
+                <Text style={s.orderInProgressText}>Tu pedido está en proceso de {displayStatus === 'pending' ? 'espera' : 'revisión'}...</Text>
+                <Text style={s.orderInProgressSubtext}>Puedes salir de esta pantalla. El estado se actualizará automáticamente.</Text>
+              </View>
+            )
+          }
+        />
+      ) : ( // Muestra el mensaje de carrito vacío si no hay items y no hay pedido en proceso
+        <View style={s.emptyCartContainer}>
+          <Text style={s.emptyCartText}>Tu carrito está vacío.</Text>
+          <Text style={s.emptyCartSubtext}>Agrega algunos productos para hacer un pedido.</Text>
+        </View>
+      )}
 
-      {/* Dirección de envío */}
+
       <View style={s.section}>
         <Text style={s.label}>Dirección envío:</Text>
-        {/* Aquí mostramos la dirección seleccionada, o un mensaje si no hay */}
-        {selectedAddress ? (
+        {addressLoading ? (
+          <ActivityIndicator color="#007bff" style={{ marginTop: 10 }} />
+        ) : selectedAddress ? (
           <View style={s.selectedAddressDetails}>
             <Text style={s.addressDetailText}>{selectedAddress.fullName}</Text>
             <Text style={s.addressDetailText}>
@@ -211,8 +277,9 @@ export default function OrderScreen() {
               {selectedAddress.city}, {selectedAddress.state} {selectedAddress.zipCode}
             </Text>
             <Text style={s.addressDetailText}>{selectedAddress.country}</Text>
-            {/* Puedes añadir más detalles si los tienes y son relevantes, ej: */}
-            {/* {selectedAddress.phoneNumber && <Text style={s.addressDetailText}>Tel: {selectedAddress.phoneNumber}</Text>} */}
+            {selectedAddress.phoneNumber && (
+              <Text style={s.addressDetailText}>Tel: {selectedAddress.phoneNumber}</Text>
+            )}
           </View>
         ) : (
           <Text style={s.noAddressText}>
@@ -221,27 +288,24 @@ export default function OrderScreen() {
         )}
       </View>
 
-      {/* Usuario y fecha */}
       <View style={s.section}>
         <Text style={s.label}>Cliente:</Text>
-        <Text>{user?.displayName || user?.email}</Text>
+        <Text>{user?.displayName || user?.email || "Cargando..."}</Text>
         <Text style={s.label}>Fecha:</Text>
         <Text>{DateTime.local().toFormat("dd/MM/yyyy")}</Text>
       </View>
 
-      {/* Pago */}
       <View style={s.section}>
         <Text style={s.label}>Pago:</Text>
         <Text>Tarjeta ****1234</Text>
       </View>
 
-      {/* Total + Confirmar */}
       <View style={s.footer}>
         <Text style={s.total}>Total: {total.toFixed(2)}€</Text>
         <Button
           title={loading ? "Enviando..." : "Confirmar pedido"}
           onPress={confirmOrder}
-          disabled={loading || cart.length === 0 || !selectedAddress} // Deshabilitar si no hay dirección seleccionada
+          disabled={loading || cart.length === 0 || !selectedAddress || currentOrderId !== null}
         />
       </View>
     </View>
@@ -336,5 +400,24 @@ const s = StyleSheet.create({
     fontSize: 15,
     color: '#333',
     lineHeight: 22,
+  },
+  orderInProgressContainer: { // Nuevo estilo
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 50,
+    backgroundColor: '#e3f2fd',
+    borderRadius: 10,
+    marginTop: 20,
+  },
+  orderInProgressText: { // Nuevo estilo
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#1565c0",
+    marginBottom: 8,
+  },
+  orderInProgressSubtext: { // Nuevo estilo
+    fontSize: 16,
+    color: "#42a5f5",
+    textAlign: "center",
   },
 });
