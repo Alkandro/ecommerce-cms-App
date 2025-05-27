@@ -44,7 +44,7 @@ export default function TabNavigator() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: "#16222b",
+        tabBarActiveTintColor: "blue",
         tabBarInactiveTintColor: "gray",
         tabBarIcon: ({ color, size }) => {
           let iconName;

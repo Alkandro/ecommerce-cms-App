@@ -11,6 +11,7 @@ import OrderScreen          from '../screens/Order/OrderScreen';
 import EditProfileScreen    from '../screens/Profile/EditProfileScreen';
 import AddressesScreen      from '../screens/Profile/AddressesScreen';
 import EditAddressScreen    from '../screens/Profile/EditAddressScreen';
+import OrderHistoryScreen from '../screens/Order/OrderHistoryScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -31,6 +32,7 @@ export default function StackNavigator() {
           <Stack.Screen name="OrderScreen"          component={OrderScreen} />
           <Stack.Screen name="EditProfileScreen"    component={EditProfileScreen} />
           <Stack.Screen name="AddressesScreen"      component={AddressesScreen} />
+          <Stack.Screen name="OrderHistory" component={OrderHistoryScreen}  />
           <Stack.Screen name="EditAddressScreen"    component={EditAddressScreen} />
         </>
       )}

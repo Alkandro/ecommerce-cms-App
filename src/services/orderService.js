@@ -3,7 +3,11 @@ import {
   addDoc, 
   doc, 
   updateDoc, 
-  serverTimestamp 
+  serverTimestamp,
+  query,
+  orderBy,
+  getDocs,
+  where 
 } from "firebase/firestore";
 import { db } from "../firebase/firebaseConfig";
 
@@ -48,8 +52,22 @@ export const orderService = {
   },
   // Opcional: Obtener pedidos por usuario
   getUserOrders: async (userId) => {
-    const q = query(collection(db, "orders"), where("userId", "==", userId), orderBy("createdAt", "desc"));
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    try {
+      const q = query(
+        collection(db, "orders"),
+        where("userId", "==", userId), // Filtra por el ID del usuario
+        orderBy("createdAt", "desc") // Ordena por fecha de creación
+      );
+      const querySnapshot = await getDocs(q);
+
+      const userOrdersList = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      return userOrdersList;
+    } catch (error) {
+      console.error(`Error al obtener los pedidos del usuario ${userId}: `, error);
+      throw error;
+    }
   }
 };
