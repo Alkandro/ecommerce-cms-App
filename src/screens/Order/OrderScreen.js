@@ -15,18 +15,19 @@ import { useAuth } from "../../context/AuthContext";
 import { useCart } from "../../context/CartContext";
 import { addressService } from "../../services/addressService";
 import { orderService } from "../../services/orderService";
+import { termsConditionsService } from "../../services/termsConditionsService"; // ¡Importar el nuevo servicio!
 import { Ionicons } from "@expo/vector-icons";
 import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "../../firebase/firebaseConfig";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from "@react-navigation/native"; // Importar useNavigation
 
 const LAST_ORDER_ID_KEY = "@lastOrderId"; // Clave para AsyncStorage
 
-// console.log("Valor de addressService en OrderScreen:", addressService); // Puedes quitar este console.log
-
 export default function OrderScreen() {
-  const { user } = useAuth();
+  const { user, userProfile, refreshUserProfile } = useAuth(); // Añadir refreshUserProfile
   const { cart, removeFromCart, updateQuantity, clearCart } = useCart();
+  const navigation = useNavigation(); // Hook de navegación
 
   const [addresses, setAddresses] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState(null);
@@ -35,6 +36,7 @@ export default function OrderScreen() {
   const [orderStatusFromDb, setOrderStatusFromDb] = useState(null);
   const [loading, setLoading] = useState(false);
   const [addressLoading, setAddressLoading] = useState(true);
+  const [latestTermsLastUpdated, setLatestTermsLastUpdated] = useState(null); // Estado para la fecha de los T&C más recientes
 
   // Cargar direcciones y último OrderId guardado
   useEffect(() => {
@@ -82,10 +84,9 @@ export default function OrderScreen() {
           setOrderStatusFromDb(data.status);
         } else {
           console.log("Order document no longer exists in DB. Clearing local state.");
-          // Si el documento ya no existe (ej. fue eliminado por el admin)
           setOrderStatusFromDb(null);
           setCurrentOrderId(null);
-          AsyncStorage.removeItem(LAST_ORDER_ID_KEY); // Limpiar el ID guardado
+          AsyncStorage.removeItem(LAST_ORDER_ID_KEY);
         }
       }, (error) => {
         console.error("Error listening to order status:", error);
@@ -100,7 +101,21 @@ export default function OrderScreen() {
     };
   }, [currentOrderId]);
 
-  // Resto de useEffects y funciones (sin cambios)
+  // Cargar la fecha de última actualización de los Términos y Condiciones
+  useEffect(() => {
+    const fetchLatestTermsDate = async () => {
+      try {
+        const { lastUpdated } = await termsConditionsService.getTermsAndConditions();
+        setLatestTermsLastUpdated(lastUpdated);
+      } catch (error) {
+        console.error("Error al cargar la última fecha de T&C:", error);
+        // Manejar el error, tal vez establecer un estado de error o un valor predeterminado
+      }
+    };
+    fetchLatestTermsDate();
+  }, []); // Se ejecuta una sola vez al montar
+
+  // Otros useEffects y funciones
   useEffect(() => {
     const initialAccepted = {};
     cart.forEach(item => {
@@ -130,6 +145,25 @@ export default function OrderScreen() {
   );
 
   const confirmOrder = async () => {
+    // Primero, verificar la aceptación de los Términos y Condiciones
+    const userAcceptedTermsAt = userProfile?.termsAcceptedAt?.toDate();
+
+    if (!userAcceptedTermsAt || !latestTermsLastUpdated || userAcceptedTermsAt.getTime() < latestTermsLastUpdated.getTime()) {
+      Alert.alert(
+        "Aviso Importante",
+        "Debes leer y aceptar la última versión de los Términos y Condiciones para poder realizar compras.",
+        [
+          { text: "Cancelar", style: "cancel" },
+          {
+            text: "Ir a Términos",
+            onPress: () => navigation.navigate('TermsConditions'), // Navegar a la pantalla de T&C
+          },
+        ]
+      );
+      return; // Detener la función si los términos no están aceptados o actualizados
+    }
+
+    // --- Lógica de pedido existente (solo se ejecuta si los T&C están OK) ---
     if (!selectedAddress) {
       Alert.alert("Elige una dirección", "Por favor, selecciona una dirección de envío antes de continuar.");
       return;
@@ -161,12 +195,11 @@ export default function OrderScreen() {
         totalAmount: total,
       });
 
-      // Guardar el ID del pedido y el estado en el estado local y AsyncStorage
       setCurrentOrderId(ref.id);
       setOrderStatusFromDb("pending");
-      await AsyncStorage.setItem(LAST_ORDER_ID_KEY, ref.id); // Persistir el ID
+      await AsyncStorage.setItem(LAST_ORDER_ID_KEY, ref.id);
 
-      clearCart(); // El carrito se vacía, pero el estado del pedido se mantiene
+      clearCart();
 
       Alert.alert("¡Pedido enviado!", "Esperando aceptación del vendedor", [
         { text: "OK", onPress: () => {} }
@@ -179,7 +212,7 @@ export default function OrderScreen() {
     }
   };
 
-  const displayStatus = currentOrderId ? orderStatusFromDb : null; // Usa el estado de la DB si hay un pedido activo
+  const displayStatus = currentOrderId ? orderStatusFromDb : null;
 
   return (
     <View style={s.container}>
@@ -200,8 +233,7 @@ export default function OrderScreen() {
         </Text>
       )}
 
-      {/* Condición para mostrar FlatList o EmptyCartContainer */}
-      {(cart.length > 0 || currentOrderId) ? ( // Muestra FlatList si hay items en carrito O si hay un pedido en proceso
+      {(cart.length > 0 || currentOrderId) ? (
         <FlatList
           data={cart}
           keyExtractor={(item) => item.product.id}
@@ -244,7 +276,6 @@ export default function OrderScreen() {
             </View>
           )}
           ListEmptyComponent={
-            // Esto se mostrará si cart.length es 0 pero currentOrderId NO es null
             currentOrderId && (
               <View style={s.orderInProgressContainer}>
                 <Text style={s.orderInProgressText}>Tu pedido está en proceso de {displayStatus === 'pending' ? 'espera' : 'revisión'}...</Text>
@@ -253,7 +284,7 @@ export default function OrderScreen() {
             )
           }
         />
-      ) : ( // Muestra el mensaje de carrito vacío si no hay items y no hay pedido en proceso
+      ) : (
         <View style={s.emptyCartContainer}>
           <Text style={s.emptyCartText}>Tu carrito está vacío.</Text>
           <Text style={s.emptyCartSubtext}>Agrega algunos productos para hacer un pedido.</Text>
@@ -290,7 +321,7 @@ export default function OrderScreen() {
 
       <View style={s.section}>
         <Text style={s.label}>Cliente:</Text>
-        <Text>{user?.displayName || user?.email || "Cargando..."}</Text>
+        <Text>{userProfile?.displayName || user?.email || "Cargando..."}</Text> 
         <Text style={s.label}>Fecha:</Text>
         <Text>{DateTime.local().toFormat("dd/MM/yyyy")}</Text>
       </View>
@@ -401,7 +432,7 @@ const s = StyleSheet.create({
     color: '#333',
     lineHeight: 22,
   },
-  orderInProgressContainer: { // Nuevo estilo
+  orderInProgressContainer: {
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 50,
@@ -409,13 +440,13 @@ const s = StyleSheet.create({
     borderRadius: 10,
     marginTop: 20,
   },
-  orderInProgressText: { // Nuevo estilo
+  orderInProgressText: {
     fontSize: 20,
     fontWeight: "bold",
     color: "#1565c0",
     marginBottom: 8,
   },
-  orderInProgressSubtext: { // Nuevo estilo
+  orderInProgressSubtext: {
     fontSize: 16,
     color: "#42a5f5",
     textAlign: "center",

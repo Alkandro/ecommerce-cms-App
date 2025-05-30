@@ -18,6 +18,7 @@ import { BannerCarousel } from "../../components/BannerCarousel";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../context/AuthContext";
 import { wishlistService } from "../../services/wishlist";
+import { notificationService } from '../../services/firestoreService';
 import Toast from "react-native-root-toast";
 import { ProductCard } from "../../components/ProductCard"; // <-- ¡Importa ProductCard!
 
@@ -36,6 +37,7 @@ export default function HomeScreen({ navigation }) {
   const [banners, setBanners] = useState([]);
   const [loadingBanners, setLoadingBanners] = useState(true);
   const [wishlistProductIds, setWishlistProductIds] = useState(new Set());
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const searchInputRef = useRef(null);
 
   useEffect(() => {
@@ -93,6 +95,28 @@ export default function HomeScreen({ navigation }) {
 
     return () => unsubscribeWishlist();
   }, [user]);
+
+  // NUEVO: useEffect para notificaciones no leídas
+  useEffect(() => {
+    let unsubscribeNotifications;
+
+    if (user?.uid) {
+      unsubscribeNotifications = notificationService.getUserNotifications(user.uid, (notifications) => {
+        const unreadCount = notifications.filter(n => !n.read).length;
+        setUnreadNotificationsCount(unreadCount);
+      });
+    } else {
+      setUnreadNotificationsCount(0); // Si no hay usuario, no hay notificaciones no leídas
+    }
+
+    // Limpieza de la suscripción
+    return () => {
+      if (unsubscribeNotifications) {
+        unsubscribeNotifications();
+      }
+    };
+  }, [user]); // Dependencia: user
+
 
   useEffect(() => {
     const txt = search.toLowerCase();
@@ -155,6 +179,9 @@ export default function HomeScreen({ navigation }) {
   const irAlUsuerProfile=() => {
     navigation.navigate("EditProfileScreen")
   }
+  const handleNotificationPress = () => {
+    navigation.navigate("Notifications"); // Asegúrate de que esta ruta sea correcta
+  };
 
   // --- MODIFICACIÓN CLAVE AQUÍ ---
   const renderProduct = ({ item }) => {
@@ -198,8 +225,16 @@ export default function HomeScreen({ navigation }) {
             <Ionicons name="search-outline" size={20} color="#999" />
           </View>
 
-          <TouchableOpacity style={styles.notificationButton}>
+          <TouchableOpacity
+           style={styles.notificationButton}
+           onPress={handleNotificationPress}
+           >
             <Ionicons name="notifications-outline" size={24} color="#000" />
+            {unreadNotificationsCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{unreadNotificationsCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.profileButton}
@@ -299,6 +334,7 @@ const styles = StyleSheet.create({
   notificationButton: {
     padding: 5,
     marginTop: Platform.OS === "ios" ? 40 : 25,
+    position: 'relative',
   },
   profileButton: {
     padding: 5,
@@ -363,5 +399,23 @@ const styles = StyleSheet.create({
     marginTop: 40,
     color: "#888",
     fontSize: 16,
+  },
+  badge: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    backgroundColor: '#ff3b30', // Un color rojo llamativo
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+    paddingHorizontal: 4, // Pequeño padding horizontal
+  },
+  badgeText: {
+    color: 'white',
+    fontSize: 11, // Tamaño de fuente más pequeño para el badge
+    fontWeight: 'bold',
   },
 });

@@ -6,10 +6,13 @@ import {
   collection, 
   query, 
   where, 
-  getDocs, 
+  getDocs,
+  orderBy,
+  onSnapshot, 
   addDoc, 
   deleteDoc, 
-  serverTimestamp 
+  serverTimestamp,
+  updateDoc  
 } from "firebase/firestore";
 import { db } from "../firebase/firebaseConfig";
 import { createUserProfile, createUserAddress } from "../models/userModel";
@@ -76,6 +79,74 @@ export const userProfileService = {
     } catch (error) {
       console.error("Error al actualizar perfil de usuario:", error);
       throw error;
+    }
+  }
+};
+export const notificationService = {
+  /**
+   * Envía una notificación a un usuario específico desde el administrador (web).
+   * @param {string} recipientUserId - El ID del usuario que recibirá la notificación.
+   * @param {string} message - El contenido del mensaje de la notificación.
+   * @returns {Promise<DocumentReference>} La referencia al documento creado.
+   */
+  sendNotification: async (recipientUserId, message) => {
+    try {
+      const docRef = await addDoc(collection(db, 'notifications'), {
+        userId: recipientUserId,
+        message: message,
+        read: false, // Las notificaciones nuevas no están leídas por defecto
+        timestamp: serverTimestamp(), // Marca de tiempo del servidor
+      });
+      console.log("Notificación enviada con ID: ", docRef.id);
+      return docRef;
+    } catch (e) {
+      console.error("Error al enviar notificación: ", e);
+      throw e;
+    }
+  },
+
+  /**
+   * Obtiene las notificaciones de un usuario en tiempo real.
+   * Utiliza `onSnapshot` para escuchar cambios en la colección.
+   * @param {string} userId - El ID del usuario.
+   * @param {function} callback - Función que se ejecuta cada vez que hay un cambio en las notificaciones.
+   * @returns {function} Una función para desuscribirse de las actualizaciones.
+   */
+  getUserNotifications: (userId, callback) => {
+    const q = query(
+      collection(db, 'notifications'),
+      where('userId', '==', userId),
+      orderBy('timestamp', 'desc') // Ordenar por fecha, las más recientes primero
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const notifications = [];
+      snapshot.forEach((doc) => {
+        notifications.push({ id: doc.id, ...doc.data() });
+      });
+      callback(notifications);
+    }, (error) => {
+      console.error("Error al obtener notificaciones en tiempo real:", error);
+    });
+
+    return unsubscribe; // Devuelve la función de desuscripción
+  },
+
+  /**
+   * Marca una notificación como leída.
+   * @param {string} notificationId - El ID de la notificación a marcar como leída.
+   * @returns {Promise<void>}
+   */
+  markNotificationAsRead: async (notificationId) => {
+    try {
+      const notificationRef = doc(db, 'notifications', notificationId);
+      await updateDoc(notificationRef, {
+        read: true
+      });
+      console.log("Notificación marcada como leída:", notificationId);
+    } catch (e) {
+      console.error("Error al marcar notificación como leída:", e);
+      throw e;
     }
   }
 };
