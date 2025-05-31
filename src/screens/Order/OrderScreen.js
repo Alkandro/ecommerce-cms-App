@@ -15,19 +15,19 @@ import { useAuth } from "../../context/AuthContext";
 import { useCart } from "../../context/CartContext";
 import { addressService } from "../../services/addressService";
 import { orderService } from "../../services/orderService";
-import { termsConditionsService } from "../../services/termsConditionsService"; // ¡Importar el nuevo servicio!
+import { termsConditionsService } from "../../services/termsConditionsService";
 import { Ionicons } from "@expo/vector-icons";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot, getDoc } from "firebase/firestore";
 import { db } from "../../firebase/firebaseConfig";
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation } from "@react-navigation/native"; // Importar useNavigation
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useNavigation } from "@react-navigation/native";
 
-const LAST_ORDER_ID_KEY = "@lastOrderId"; // Clave para AsyncStorage
+const LAST_ORDER_ID_KEY = "@lastOrderId";
 
 export default function OrderScreen() {
-  const { user, userProfile, refreshUserProfile } = useAuth(); // Añadir refreshUserProfile
+  const { user, userProfile } = useAuth();
   const { cart, removeFromCart, updateQuantity, clearCart } = useCart();
-  const navigation = useNavigation(); // Hook de navegación
+  const navigation = useNavigation();
 
   const [addresses, setAddresses] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState(null);
@@ -36,23 +36,28 @@ export default function OrderScreen() {
   const [orderStatusFromDb, setOrderStatusFromDb] = useState(null);
   const [loading, setLoading] = useState(false);
   const [addressLoading, setAddressLoading] = useState(true);
-  const [latestTermsLastUpdated, setLatestTermsLastUpdated] = useState(null); // Estado para la fecha de los T&C más recientes
+  const [latestTermsLastUpdated, setLatestTermsLastUpdated] = useState(null);
 
-  // Cargar direcciones y último OrderId guardado
+  // 1) Cargar direcciones y último OrderId guardado
   useEffect(() => {
     const loadInitialData = async () => {
       setAddressLoading(true);
+
+      // Carga direcciones del usuario (si ya existe)
       if (user?.uid) {
         try {
           const list = await addressService.getUserAddresses(user.uid);
           setAddresses(list);
           if (list.length > 0) {
-            const defaultAddress = list.find(addr => addr.isDefault);
-            setSelectedAddress(defaultAddress || list[0]);
+            const defaultAddr = list.find((addr) => addr.isDefault);
+            setSelectedAddress(defaultAddr || list[0]);
           }
-        } catch (error) {
-          console.error("Error cargando direcciones en OrderScreen:", error);
-          Alert.alert("Error", "No se pudieron cargar tus direcciones. Inténtalo de nuevo.");
+        } catch (err) {
+          console.error("Error cargando direcciones en OrderScreen:", err);
+          Alert.alert(
+            "Error",
+            "No se pudieron cargar tus direcciones. Inténtalo de nuevo."
+          );
         }
       }
       setAddressLoading(false);
@@ -64,44 +69,97 @@ export default function OrderScreen() {
           console.log("Found stored order ID:", storedOrderId);
           setCurrentOrderId(storedOrderId);
         }
-      } catch (e) {
-        console.error("Failed to load last order ID from AsyncStorage", e);
+      } catch (err) {
+        console.error("Failed to load last order ID from AsyncStorage", err);
       }
     };
+
     loadInitialData();
   }, [user?.uid]);
 
-  // Escucha el estado del pedido en tiempo real
+  // 2) Escucha el estado del pedido en tiempo real, solo cuando user.uid y currentOrderId existen
   useEffect(() => {
-    let unsubscribe;
-    if (currentOrderId) {
-      console.log(`Listening to order ${currentOrderId} changes.`);
-      const orderRef = doc(db, "orders", currentOrderId);
-      unsubscribe = onSnapshot(orderRef, (docSnap) => {
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          console.log("Order data changed:", data.status, "at", data.createdAt?.toDate(), "acceptedAt", data.acceptedAt?.toDate());
-          setOrderStatusFromDb(data.status);
-        } else {
-          console.log("Order document no longer exists in DB. Clearing local state.");
+    if (!currentOrderId || !user?.uid) {
+      return;
+    }
+
+    console.log(`Listening to order ${currentOrderId} for user.uid ${user.uid}`);
+
+    const orderRef = doc(db, "orders", currentOrderId);
+
+    // Antes de suscribirnos, probamos un getDoc para comprobar permisos/exists
+    const checkAndSubscribe = async () => {
+      try {
+        const singleSnap = await getDoc(orderRef);
+        if (!singleSnap.exists()) {
+          // El pedido no existe o no tenemos permiso
+          console.log(
+            "getDoc: El pedido no existe o no tienes permiso para leerlo."
+          );
           setOrderStatusFromDb(null);
           setCurrentOrderId(null);
-          AsyncStorage.removeItem(LAST_ORDER_ID_KEY);
+          await AsyncStorage.removeItem(LAST_ORDER_ID_KEY);
+          return;
         }
-      }, (error) => {
-        console.error("Error listening to order status:", error);
+
+        // Si existía y tenemos permiso, suscribimos onSnapshot
+        const unsubscribe = onSnapshot(
+          orderRef,
+          (docSnap) => {
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              console.log(
+                "Order data changed:",
+                data.status,
+                "createdAt:",
+                data.createdAt?.toDate(),
+                "acceptedAt:",
+                data.acceptedAt?.toDate()
+              );
+              setOrderStatusFromDb(data.status);
+            } else {
+              // Si alguien borró el pedido en Firestore, limpiamos estado
+              console.log(
+                "El documento de pedido ya no existe. Limpiando estado local."
+              );
+              setOrderStatusFromDb(null);
+              setCurrentOrderId(null);
+              AsyncStorage.removeItem(LAST_ORDER_ID_KEY);
+            }
+          },
+          (error) => {
+            console.error("Error listening to order status:", error);
+            setOrderStatusFromDb("error");
+          }
+        );
+
+        // Guardamos el unsubscribe para el cleanup
+        return unsubscribe;
+      } catch (error) {
+        console.error("Error con getDoc() antes de onSnapshot:", error);
+        // Si aquí falla (ej. permisos insuficientes), limpiamos estado
         setOrderStatusFromDb("error");
-      });
-    }
-    return () => {
-      if (unsubscribe) {
-        console.log(`Unsubscribed from order ${currentOrderId}.`);
-        unsubscribe();
+        setCurrentOrderId(null);
+        await AsyncStorage.removeItem(LAST_ORDER_ID_KEY);
       }
     };
-  }, [currentOrderId]);
 
-  // Cargar la fecha de última actualización de los Términos y Condiciones
+    // Ejecutamos la comprobación y guardamos la función de cleanup
+    let unsubscribeFunction;
+    checkAndSubscribe().then((unsub) => {
+      unsubscribeFunction = unsub;
+    });
+
+    // Cleanup cuando el componente se desmonte o currentOrderId/user.uid cambien
+    return () => {
+      if (unsubscribeFunction) {
+        console.log(`Unsubscribed from order ${currentOrderId}.`);
+        unsubscribeFunction();
+      }
+    };
+  }, [currentOrderId, user?.uid]);
+
+  // 3) Cargar la fecha de última actualización de los Términos y Condiciones
   useEffect(() => {
     const fetchLatestTermsDate = async () => {
       try {
@@ -109,46 +167,59 @@ export default function OrderScreen() {
         setLatestTermsLastUpdated(lastUpdated);
       } catch (error) {
         console.error("Error al cargar la última fecha de T&C:", error);
-        // Manejar el error, tal vez establecer un estado de error o un valor predeterminado
       }
     };
     fetchLatestTermsDate();
-  }, []); // Se ejecuta una sola vez al montar
+  }, []);
 
-  // Otros useEffects y funciones
+  // 4) Inicializar acceptedItems cada vez que cambie el carrito
   useEffect(() => {
     const initialAccepted = {};
-    cart.forEach(item => {
+    cart.forEach((item) => {
       initialAccepted[item.product.id] = false;
     });
     setAcceptedItems(initialAccepted);
   }, [cart]);
 
   const toggleAccept = (productId) =>
-    setAcceptedItems((prev) => ({ ...prev, [productId]: !prev[productId] }));
+    setAcceptedItems((prev) => ({
+      ...prev,
+      [productId]: !prev[productId],
+    }));
 
-  const handleDecreaseQuantity = useCallback((item) => {
-    if (item.quantity - 1 <= 0) {
-      removeFromCart(item.product.id);
-    } else {
-      updateQuantity(item.product.id, item.quantity - 1);
-    }
-  }, [removeFromCart, updateQuantity]);
+  const handleDecreaseQuantity = useCallback(
+    (item) => {
+      if (item.quantity - 1 <= 0) {
+        removeFromCart(item.product.id);
+      } else {
+        updateQuantity(item.product.id, item.quantity - 1);
+      }
+    },
+    [removeFromCart, updateQuantity]
+  );
 
-  const handleIncreaseQuantity = useCallback((item) => {
-    updateQuantity(item.product.id, item.quantity + 1);
-  }, [updateQuantity]);
+  const handleIncreaseQuantity = useCallback(
+    (item) => {
+      updateQuantity(item.product.id, item.quantity + 1);
+    },
+    [updateQuantity]
+  );
 
+  // Calcular total del carrito
   const total = cart.reduce(
     (sum, i) => sum + i.product.price * i.quantity,
     0
   );
 
+  // 5) Función para confirmar pedido
   const confirmOrder = async () => {
-    // Primero, verificar la aceptación de los Términos y Condiciones
+    // Validar Términos y Condiciones
     const userAcceptedTermsAt = userProfile?.termsAcceptedAt?.toDate();
-
-    if (!userAcceptedTermsAt || !latestTermsLastUpdated || userAcceptedTermsAt.getTime() < latestTermsLastUpdated.getTime()) {
+    if (
+      !userAcceptedTermsAt ||
+      !latestTermsLastUpdated ||
+      userAcceptedTermsAt.getTime() < latestTermsLastUpdated.getTime()
+    ) {
       Alert.alert(
         "Aviso Importante",
         "Debes leer y aceptar la última versión de los Términos y Condiciones para poder realizar compras.",
@@ -156,25 +227,35 @@ export default function OrderScreen() {
           { text: "Cancelar", style: "cancel" },
           {
             text: "Ir a Términos",
-            onPress: () => navigation.navigate('TermsConditions'), // Navegar a la pantalla de T&C
+            onPress: () => navigation.navigate("TermsConditions"),
           },
         ]
       );
-      return; // Detener la función si los términos no están aceptados o actualizados
+      return;
     }
 
-    // --- Lógica de pedido existente (solo se ejecuta si los T&C están OK) ---
+    // Validar que haya dirección seleccionada
     if (!selectedAddress) {
-      Alert.alert("Elige una dirección", "Por favor, selecciona una dirección de envío antes de continuar.");
+      Alert.alert(
+        "Elige una dirección",
+        "Por favor, selecciona una dirección de envío antes de continuar."
+      );
       return;
     }
+
+    // Validar que todos los ítems estén aceptados
     const allOK = cart.every((i) => acceptedItems[i.product.id]);
     if (!allOK) {
-      Alert.alert("Acepta todos los productos antes", "Debes aceptar todos los productos en tu carrito para confirmar el pedido.");
+      Alert.alert(
+        "Acepta todos los productos antes",
+        "Debes aceptar todos los productos en tu carrito para confirmar el pedido."
+      );
       return;
     }
+
     setLoading(true);
     try {
+      // Construir array de items para el pedido
       const itemsForOrder = cart.map((i) => ({
         id: i.product.id,
         name: i.product.name,
@@ -185,6 +266,7 @@ export default function OrderScreen() {
 
       const paymentMethod = "Tarjeta ****1234";
 
+      // Crear el pedido en Firestore
       const ref = await orderService.createOrder({
         userId: user.uid,
         userName: user.displayName || user.email,
@@ -195,6 +277,21 @@ export default function OrderScreen() {
         totalAmount: total,
       });
 
+      console.log("Pedido creado con ID:", ref.id);
+
+      // Opcional: comprobar datos guardados (para debug)
+      try {
+        const snap = await getDoc(doc(db, "orders", ref.id));
+        if (snap.exists()) {
+          console.log("Datos guardados en Firestore (pedido):", snap.data());
+        }
+      } catch (err) {
+        console.error(
+          "Error al leer pedido justo después de crearlo (debug):",
+          err
+        );
+      }
+
       setCurrentOrderId(ref.id);
       setOrderStatusFromDb("pending");
       await AsyncStorage.setItem(LAST_ORDER_ID_KEY, ref.id);
@@ -202,7 +299,7 @@ export default function OrderScreen() {
       clearCart();
 
       Alert.alert("¡Pedido enviado!", "Esperando aceptación del vendedor", [
-        { text: "OK", onPress: () => {} }
+        { text: "OK" },
       ]);
     } catch (e) {
       console.error("Error al enviar el pedido:", e);
@@ -216,11 +313,16 @@ export default function OrderScreen() {
 
   return (
     <View style={s.container}>
+      {/* Mostrar estado del pedido si existe */}
       {displayStatus && (
         <Text
           style={[
             s.status,
-            displayStatus === "pending" ? s.pending : (displayStatus === "accepted" ? s.accepted : s.rejected),
+            displayStatus === "pending"
+              ? s.pending
+              : displayStatus === "accepted"
+              ? s.accepted
+              : s.rejected,
           ]}
         >
           {displayStatus === "pending"
@@ -233,6 +335,7 @@ export default function OrderScreen() {
         </Text>
       )}
 
+      {/* Si hay ítems en carrito o ya existe un pedido en progreso, muestro la lista */}
       {(cart.length > 0 || currentOrderId) ? (
         <FlatList
           data={cart}
@@ -242,7 +345,9 @@ export default function OrderScreen() {
               <Image source={{ uri: item.product.image }} style={s.img} />
               <View style={s.info}>
                 <Text style={s.name}>{item.product.name}</Text>
-                <Text>{item.product.price}€ × {item.quantity}</Text>
+                <Text>
+                  {item.product.price}€ × {item.quantity}
+                </Text>
               </View>
               <View style={s.qty}>
                 <TouchableOpacity onPress={() => handleDecreaseQuantity(item)}>
@@ -260,9 +365,7 @@ export default function OrderScreen() {
                 >
                   <Ionicons name="trash-outline" size={22} color="#D32F2F" />
                 </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => toggleAccept(item.product.id)}
-                >
+                <TouchableOpacity onPress={() => toggleAccept(item.product.id)}>
                   <Text
                     style={[
                       s.accept,
@@ -278,8 +381,14 @@ export default function OrderScreen() {
           ListEmptyComponent={
             currentOrderId && (
               <View style={s.orderInProgressContainer}>
-                <Text style={s.orderInProgressText}>Tu pedido está en proceso de {displayStatus === 'pending' ? 'espera' : 'revisión'}...</Text>
-                <Text style={s.orderInProgressSubtext}>Puedes salir de esta pantalla. El estado se actualizará automáticamente.</Text>
+                <Text style={s.orderInProgressText}>
+                  Tu pedido está en proceso de{" "}
+                  {displayStatus === "pending" ? "espera" : "revisión"}...
+                </Text>
+                <Text style={s.orderInProgressSubtext}>
+                  Puedes salir de esta pantalla. El estado se actualizará
+                  automáticamente.
+                </Text>
               </View>
             )
           }
@@ -287,29 +396,40 @@ export default function OrderScreen() {
       ) : (
         <View style={s.emptyCartContainer}>
           <Text style={s.emptyCartText}>Tu carrito está vacío.</Text>
-          <Text style={s.emptyCartSubtext}>Agrega algunos productos para hacer un pedido.</Text>
+          <Text style={s.emptyCartSubtext}>
+            Agrega algunos productos para hacer un pedido.
+          </Text>
         </View>
       )}
 
-
+      {/* Sección de dirección */}
       <View style={s.section}>
         <Text style={s.label}>Dirección envío:</Text>
         {addressLoading ? (
           <ActivityIndicator color="#007bff" style={{ marginTop: 10 }} />
         ) : selectedAddress ? (
           <View style={s.selectedAddressDetails}>
-            <Text style={s.addressDetailText}>{selectedAddress.fullName}</Text>
+            <Text style={s.addressDetailText}>
+              {selectedAddress.fullName}
+            </Text>
             <Text style={s.addressDetailText}>
               {selectedAddress.street}
-              {selectedAddress.number ? ', ' + selectedAddress.number : ''}
-              {selectedAddress.apartment ? ' (' + selectedAddress.apartment + ')' : ''}
+              {selectedAddress.number ? ", " + selectedAddress.number : ""}
+              {selectedAddress.apartment
+                ? " (" + selectedAddress.apartment + ")"
+                : ""}
             </Text>
             <Text style={s.addressDetailText}>
-              {selectedAddress.city}, {selectedAddress.state} {selectedAddress.zipCode}
+              {selectedAddress.city}, {selectedAddress.state}{" "}
+              {selectedAddress.zipCode}
             </Text>
-            <Text style={s.addressDetailText}>{selectedAddress.country}</Text>
+            <Text style={s.addressDetailText}>
+              {selectedAddress.country}
+            </Text>
             {selectedAddress.phoneNumber && (
-              <Text style={s.addressDetailText}>Tel: {selectedAddress.phoneNumber}</Text>
+              <Text style={s.addressDetailText}>
+                Tel: {selectedAddress.phoneNumber}
+              </Text>
             )}
           </View>
         ) : (
@@ -319,24 +439,29 @@ export default function OrderScreen() {
         )}
       </View>
 
+      {/* Sección de cliente/fecha */}
       <View style={s.section}>
         <Text style={s.label}>Cliente:</Text>
-        <Text>{userProfile?.displayName || user?.email || "Cargando..."}</Text> 
+        <Text>{userProfile?.displayName || user?.email || "Cargando..."}</Text>
         <Text style={s.label}>Fecha:</Text>
         <Text>{DateTime.local().toFormat("dd/MM/yyyy")}</Text>
       </View>
 
+      {/* Sección de pago (fija) */}
       <View style={s.section}>
         <Text style={s.label}>Pago:</Text>
         <Text>Tarjeta ****1234</Text>
       </View>
 
+      {/* Footer con total y botón */}
       <View style={s.footer}>
         <Text style={s.total}>Total: {total.toFixed(2)}€</Text>
         <Button
           title={loading ? "Enviando..." : "Confirmar pedido"}
           onPress={confirmOrder}
-          disabled={loading || cart.length === 0 || !selectedAddress || currentOrderId !== null}
+          disabled={
+            loading || cart.length === 0 || !selectedAddress || currentOrderId !== null
+          }
         />
       </View>
     </View>
@@ -373,7 +498,6 @@ const s = StyleSheet.create({
   },
   qtyText: { marginHorizontal: 6 },
   actions: { alignItems: "flex-end" },
-  del: { color: "#d32f2f", marginBottom: 4 },
   accept: {
     color: "#1565c0",
     borderWidth: 1,
@@ -417,11 +541,11 @@ const s = StyleSheet.create({
   selectedAddressDetails: {
     marginTop: 10,
     padding: 12,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: "#f8f8f8",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
-    shadowColor: '#000',
+    borderColor: "#e0e0e0",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
@@ -429,14 +553,14 @@ const s = StyleSheet.create({
   },
   addressDetailText: {
     fontSize: 15,
-    color: '#333',
+    color: "#333",
     lineHeight: 22,
   },
   orderInProgressContainer: {
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 50,
-    backgroundColor: '#e3f2fd',
+    backgroundColor: "#e3f2fd",
     borderRadius: 10,
     marginTop: 20,
   },

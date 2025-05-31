@@ -131,6 +131,10 @@ export const notificationService = {
 
     return unsubscribe; // Devuelve la función de desuscripción
   },
+  deleteNotification: async (notificationId) => {
+    const notifRef = doc(db, "notifications", notificationId);
+    await deleteDoc(notifRef);
+  },
 
   /**
    * Marca una notificación como leída.
@@ -148,7 +152,9 @@ export const notificationService = {
       console.error("Error al marcar notificación como leída:", e);
       throw e;
     }
+    
   }
+  
 };
 
 // Servicios para gestión de direcciones

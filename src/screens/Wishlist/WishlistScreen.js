@@ -21,7 +21,10 @@ import { ProductCard } from "../../components/ProductCard";
 const { width } = Dimensions.get("window");
 const cardMargin = 8;
 const numColumns = 2;
-const cardWidth = (width / numColumns) - (cardMargin * numColumns); // Calcula el ancho de cada tarjeta
+// Ajuste el cálculo del ancho de la tarjeta para que quede más centrado y ancho.
+// Se restan los márgenes de cada lado de la tarjeta, y un pequeño ajuste extra.
+const cardWidth = (width / numColumns) - (cardMargin * 2) - 5;
+
 
 export default function WishlistScreen() {
   const { user } = useAuth();
@@ -60,13 +63,14 @@ export default function WishlistScreen() {
     }
   };
 
+  // --- MODIFICACIÓN CLAVE AQUÍ: handleRemove SOLO ELIMINA ---
   const handleRemove = async (productId) => {
     try {
       await wishlistService.removeProductFromWishlist(user.uid, productId);
       Toast.show("Eliminado de favoritos", {
         position: Toast.positions.CENTER,
       });
-      loadWishlist();
+      loadWishlist(); // Volver a cargar la lista después de la eliminación
     } catch (error) {
       console.error("Error al eliminar de favoritos:", error);
       Toast.show("No se pudo eliminar", {
@@ -80,11 +84,12 @@ export default function WishlistScreen() {
 
     try {
       addToCart(productToAdd);
+      // Aquí está bien que elimine de la lista de deseos después de añadir al carrito
       await wishlistService.removeProductFromWishlist(user.uid, productToAdd.id);
       Toast.show(`${productToAdd.name} añadido al carrito y eliminado de favoritos.`, {
         position: Toast.positions.CENTER,
       });
-      loadWishlist();
+      loadWishlist(); // Volver a cargar la lista para reflejar el cambio
     } catch (error) {
       console.error("Error al añadir al carrito desde favoritos:", error);
       Toast.show("No se pudo añadir al carrito.", {
@@ -94,11 +99,13 @@ export default function WishlistScreen() {
   };
 
   const renderItem = ({ item }) => (
-    <View style={styles.cardWrapper}>
+    // Aplica el margen a los lados del card directamente aquí
+    <View style={[styles.cardWrapper, { marginLeft: cardMargin, marginRight: cardMargin }]}>
       <TouchableOpacity
         onPress={() =>
           navigation.navigate("ProductDetail", { product: item })
         }
+        style={{ flex: 1 }} // Asegura que el TouchableOpacity ocupe el espacio
       >
         <ProductCard product={item} />
       </TouchableOpacity>
@@ -106,14 +113,14 @@ export default function WishlistScreen() {
       <View style={styles.actionButtonsContainer}>
         <TouchableOpacity
           style={styles.removeBtn}
-          onPress={() => handleRemove(item.id)}
+          onPress={() => handleRemove(item.id)} // Este solo elimina
         >
           <Ionicons name="trash-outline" size={24} color="#e53935" />
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.addToCartBtn}
-          onPress={() => handleAddToCartFromWishlist(item)}
+          onPress={() => handleAddToCartFromWishlist(item)} // Este añade y luego elimina
         >
           <Ionicons name="cart-outline" size={24} color="#16222b" />
         </TouchableOpacity>
@@ -150,9 +157,11 @@ export default function WishlistScreen() {
         data={products}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        columnWrapperStyle={products.length === 1 ? styles.singleColumnWrapper : null}
+        // columnWrapperStyle para distribuir los cards uniformemente
+        columnWrapperStyle={styles.columnWrapper}
         contentContainerStyle={styles.listContent}
-        numColumns={numColumns} // Define numColumns aquí
+        numColumns={numColumns}
+        showsVerticalScrollIndicator={false} // Para una mejor experiencia de usuario
       />
     </View>
   );
@@ -164,19 +173,34 @@ const styles = StyleSheet.create({
     backgroundColor: "#f4f6f8",
   },
   listContent: {
-    padding: cardMargin, // Usamos el margen definido
+    padding: cardMargin, // Padding general de la lista
   },
   cardWrapper: {
     width: cardWidth, // Usa el ancho calculado
-    margin: cardMargin / 2, // Mitad del margen para distribuir bien entre las columnas
-    position: "relative",
+    // Eliminamos el marginHorizontal aquí para aplicarlo directamente en renderItem
+    marginBottom: 16, // Espacio entre filas
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    overflow: "hidden",
+    // Sombra para iOS
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 3.84,
+    // Sombra para Android
+    elevation: 5,
+    borderColor: "#e0e0e0",
+    borderWidth: StyleSheet.hairlineWidth,
   },
   actionButtonsContainer: {
     position: "absolute",
     top: 8,
     right: 8,
     flexDirection: "row",
-    zIndex: 1, // Asegura que los botones estén por encima del card
+    zIndex: 1,
   },
   removeBtn: {
     backgroundColor: "rgba(255,255,255,0.8)",
@@ -201,8 +225,12 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 10,
   },
-  // Nuevo estilo para cuando hay un solo producto y necesitas centrarlo
+  // Nuevo estilo para columnWrapperStyle
+  columnWrapper: {
+    justifyContent: 'space-between', // Distribuye el espacio uniformemente entre los elementos
+  },
+  // Mantén singleColumnWrapper si necesitas un comportamiento diferente para un solo elemento
   singleColumnWrapper: {
-    justifyContent: 'flex-start', // Centra el elemento en la fila
+    justifyContent: 'flex-start', // O 'center' si prefieres centrarlo completamente
   },
 });

@@ -177,7 +177,7 @@ export default function HomeScreen({ navigation }) {
   };
 
   const irAlUsuerProfile=() => {
-    navigation.navigate("EditProfileScreen")
+    navigation.navigate("ProfileDetailsScreen")
   }
   const handleNotificationPress = () => {
     navigation.navigate("Notifications"); // Asegúrate de que esta ruta sea correcta
