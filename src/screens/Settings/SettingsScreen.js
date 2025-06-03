@@ -1043,12 +1043,15 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderWidth: 1,
-    borderColor: '#ddd',
     borderRadius: 8,
+     borderColor: '#AAB3B9',
+    backgroundColor:"#055F68",
   },
   editProfileButtonText: {
     fontSize: 16,
     fontWeight: '500',
+    color: '#FFF',
+    
   },
   menuContainer: {
     paddingHorizontal: 16,
@@ -1104,13 +1107,15 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     paddingVertical: 15,
     borderWidth: 1,
-    borderColor: '#ff3b30',
+    borderColor: '#AAB3B9',
     borderRadius: 8,
     alignItems: 'center',
+    backgroundColor:"#055F68",
   },
   logoutButtonText: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#ff3b30',
+    color: '#FFF',
+   
   },
 });
