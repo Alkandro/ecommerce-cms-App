@@ -8,6 +8,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  SafeAreaView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -144,7 +145,7 @@ export default function AddressesScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {/* Header con título y botón de retroceso */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={handleBackButton}>
@@ -185,7 +186,7 @@ export default function AddressesScreen() {
           </TouchableOpacity>
         </ScrollView>
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 

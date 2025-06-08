@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+// src/screens/TermsConditionsScreen.js
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -28,15 +29,15 @@ export default function TermsConditionsScreen() {
   const [accepting, setAccepting] = useState(false);
   const [error, setError] = useState(null);
 
-  // Versión aceptada por el usuario y comprobación de vigencia
+  // Timestamp (ms) cuando el usuario aceptó la versión anterior
   const userAcceptedTs = userProfile?.termsAcceptedAt?.toDate()?.getTime();
+  // Comprobamos si ya aceptó la versión vigente
   const areTermsAcceptedAndCurrent =
     userAcceptedTs &&
     currentTermsLastUpdated &&
     userAcceptedTs >= currentTermsLastUpdated.getTime();
 
   useEffect(() => {
-    // Si ya estamos aceptando, o si ya tenemos la versión actual aceptada, salimos
     if (accepting) return;
     if (areTermsAcceptedAndCurrent) {
       setLoading(false);
@@ -48,16 +49,18 @@ export default function TermsConditionsScreen() {
       setLoading(true);
       setError(null);
       try {
-        // 1) Traer términos
+        // 1) Traer términos + lastUpdated desde tu servicio
         const { content, lastUpdated } = await termsConditionsService.getTermsAndConditions();
         setTermsContent(content || 'No hay términos disponibles.');
         setCurrentTermsLastUpdated(lastUpdated);
 
-        // 2) Si hay usuario, refrescar su perfil y comprobar timestamp
+        // 2) Si hay usuario, refrescar perfil y comprobar si aceptó esta versión
         if (user?.uid) {
           await refreshUserProfile();
+          // Obtenemos el perfil actualizado
           const latest = await userProfileService.getUserProfile(user.uid);
-          const acceptedAt = latest?.termsAcceptedAt?.toDate()?.getTime() || 0;
+          const acceptedAt =
+            latest?.termsAcceptedAt?.toDate()?.getTime() || 0;
           setChecked(acceptedAt >= (lastUpdated?.getTime() || 0));
         } else {
           setChecked(false);
@@ -70,7 +73,7 @@ export default function TermsConditionsScreen() {
     };
 
     fetchTermsAndProfile();
-  }, [user?.uid, accepting]); // <-- solo uid y accepting
+  }, [user?.uid, accepting]);
 
   const handleAcceptTerms = async () => {
     if (!user?.uid) {
@@ -83,12 +86,19 @@ export default function TermsConditionsScreen() {
 
     setAccepting(true);
     try {
+      // 1) Actualizamos termsAcceptedAt
       await userProfileService.updateUserProfile(user.uid, {
         termsAcceptedAt: new Date(),
+        // 2) Además guardamos lastViewedTerms = currentTermsLastUpdated
+        lastViewedTerms: currentTermsLastUpdated,
       });
+      // Refrescar el perfil local
       await refreshUserProfile();
       Alert.alert('¡Éxito!', 'Has aceptado los términos.', [
-        { text: 'OK', onPress: () => navigation.goBack() },
+        {
+          text: 'OK',
+          onPress: () => navigation.goBack(),
+        },
       ]);
     } catch {
       Alert.alert('Error', 'No se pudo registrar tu aceptación.');
@@ -109,7 +119,12 @@ export default function TermsConditionsScreen() {
     return (
       <SafeAreaView style={styles.errorContainer}>
         <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity onPress={() => {/* podrías reiniciar un estado para reintentar */}}>
+        <TouchableOpacity onPress={() => {
+            // Podemos reiniciar el fetch volviendo a cargar pantalla
+            setError(null);
+            setLoading(true);
+          }}
+        >
           <Text style={styles.retryButtonText}>Reintentar</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -135,16 +150,32 @@ export default function TermsConditionsScreen() {
             disabled={areTermsAcceptedAndCurrent}
           />
           <Text style={styles.checkboxLabel}>
-            Acepto los <Text style={styles.highlightText}>Términos y Condiciones</Text>.
+            Acepto los{' '}
+            <Text style={styles.highlightText}>
+              Términos y Condiciones
+            </Text>
+            .
           </Text>
         </View>
         <TouchableOpacity
-          style={[styles.acceptButton, (!isChecked || accepting || areTermsAcceptedAndCurrent) && styles.acceptButtonDisabled]}
+          style={[
+            styles.acceptButton,
+            (!isChecked ||
+              accepting ||
+              areTermsAcceptedAndCurrent) &&
+              styles.acceptButtonDisabled,
+          ]}
           onPress={handleAcceptTerms}
-          disabled={!isChecked || accepting || areTermsAcceptedAndCurrent}
+          disabled={
+            !isChecked || accepting || areTermsAcceptedAndCurrent
+          }
         >
           <Text style={styles.acceptButtonText}>
-            {areTermsAcceptedAndCurrent ? 'Términos Aceptados' : accepting ? 'Aceptando...' : 'Aceptar Términos'}
+            {areTermsAcceptedAndCurrent
+              ? 'Términos Aceptados'
+              : accepting
+              ? 'Aceptando...'
+              : 'Aceptar Términos'}
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -152,12 +183,8 @@ export default function TermsConditionsScreen() {
   );
 }
 
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
+  container: { flex: 1, backgroundColor: '#fff' },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -182,14 +209,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 20,
   },
-  retryButton: {
-    backgroundColor: '#007bff',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-  },
   retryButtonText: {
-    color: '#fff',
+    color: '#007bff',
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -202,57 +223,41 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
-  backButton: {
-    padding: 5,
-  },
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     textAlign: 'center',
   },
-  headerRight: {
-    width: 28, // Para mantener el título centrado
-  },
-  scrollView: {
-    flex: 1,
-  },
-  contentContainer: {
-    padding: 20,
-  },
+  scrollView: { flex: 1 },
   termsContentText: {
     fontSize: 15,
     lineHeight: 22,
     color: '#333',
     marginBottom: 30,
+    margin: 15,
   },
   checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 20,
-  },
-  checkbox: {
-    marginRight: 8,
-    width: 24,
-    height: 24,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: '#666',
+    margin: 15,
   },
   checkboxLabel: {
     fontSize: 16,
     color: '#333',
-    flex: 1, // Permite que el texto ocupe el espacio restante
+    flex: 1,
   },
   highlightText: {
     fontWeight: 'bold',
     color: '#16222b',
   },
   acceptButton: {
-    backgroundColor: '#16222b',
+    backgroundColor: '#055F68',
     paddingVertical: 15,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    margin: 20,
   },
   acceptButtonDisabled: {
     backgroundColor: '#cccccc',
@@ -262,13 +267,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  oldTermsWarning: {
-    color: '#dc3545',
-    backgroundColor: '#f8d7da',
-    padding: 10,
-    borderRadius: 5,
-    marginTop: 20,
-    textAlign: 'center',
-    fontSize: 14,
-  }
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });

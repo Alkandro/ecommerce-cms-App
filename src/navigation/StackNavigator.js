@@ -15,6 +15,7 @@ import ProfileDetailsScreen from '../screens/Profile/ProfileDetailsScreen';
 import OrderHistoryScreen from "../screens/Order/OrderHistoryScreen";
 import NotificationsScreen from '../screens/Notifications/NotificationsScreen';
 import TermsConditionsScreen from "../screens/TermsConditionsScreen/TermsConditionsScreen";
+import HomeScreen from"../screens/Home/HomeScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -38,6 +39,7 @@ export default function StackNavigator() {
           <Stack.Screen name="Notifications" component={NotificationsScreen} />
           <Stack.Screen name="AddressesScreen" component={AddressesScreen} />
           <Stack.Screen name="OrderHistory" component={OrderHistoryScreen} />
+          <Stack.Screen name="HomeScreen" component={HomeScreen} />
           <Stack.Screen
             name="EditAddressScreen"
             component={EditAddressScreen}

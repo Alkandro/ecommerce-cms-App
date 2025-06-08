@@ -2,7 +2,8 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-
+import { TouchableOpacity } from "react-native";
+import { useNavigation } from '@react-navigation/native';
 import HomeScreen from "../screens/Home/HomeScreen";
 import WishlistScreen from "../screens/Wishlist/WishlistScreen";
 import SettingsScreen from "../screens/Settings/SettingsScreen";
@@ -14,6 +15,8 @@ const WishlistInternalStack = createNativeStackNavigator();
 
 // Componente que define la pila de navegación para la pestaña Wishlist
 function WishlistStackScreen() {
+  const navigation = useNavigation();
+
   return (
     <WishlistInternalStack.Navigator>
       <WishlistInternalStack.Screen
@@ -30,6 +33,13 @@ function WishlistStackScreen() {
           headerTitleStyle: {
             fontWeight: 'bold',
           },
+          headerLeft: () => (
+             <TouchableOpacity onPress={() => navigation.navigate('Tabs', { screen: 'Home' })} 
+             style={{ marginLeft: 15 }}
+           >
+             <Ionicons name="arrow-back" size={24} color="#000" />
+             </TouchableOpacity>
+           ),
         }}
       />
     </WishlistInternalStack.Navigator>

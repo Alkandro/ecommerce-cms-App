@@ -1,27 +1,4 @@
 // /home/ubuntu/ecommerce_app/models/userModel.js
-/**
- * Modelo de datos para usuarios en Firestore
- * 
- * Este archivo define la estructura de datos recomendada para almacenar
- * información de usuarios en Firestore, incluyendo información personal,
- * direcciones de envío y métodos de pago.
- */
-
-/**
- * Estructura de colecciones en Firestore:
- * 
- * - users: Colección principal de usuarios
- *   - {userId}: Documento de usuario (ID = UID de Firebase Auth)
- *     - profile: Información básica del perfil
- *     - settings: Configuraciones y preferencias
- *     
- * - userAddresses: Subcolección de direcciones de envío
- *   - {addressId}: Documento de dirección
- * 
- * - userPaymentMethods: Subcolección de métodos de pago (referencias seguras)
- *   - {paymentId}: Documento de método de pago
- */
-
 // Modelo de perfil de usuario
 export const userProfileModel = {
     // Información básica (visible en SettingsScreen)

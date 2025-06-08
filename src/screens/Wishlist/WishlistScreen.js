@@ -44,6 +44,8 @@ export default function WishlistScreen() {
     }, [user])
   );
 
+  
+
   const loadWishlist = async () => {
     setLoading(true);
     try {

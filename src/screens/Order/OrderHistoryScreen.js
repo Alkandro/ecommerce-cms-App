@@ -1,5 +1,5 @@
 // src/screens/OrderHistoryScreen.js
-import React, { useState, useEffect, useCallback } from 'react'; // ¡Importa useCallback!
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -23,7 +23,6 @@ export default function OrderHistoryScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Envuelve fetchUserOrders en useCallback
   const fetchUserOrders = useCallback(async () => {
     if (!user?.uid) {
       setLoading(false);
@@ -33,21 +32,21 @@ export default function OrderHistoryScreen() {
 
     try {
       setLoading(true);
-      setError(null); // Limpiar error anterior al intentar recargar
+      setError(null);
       const userOrders = await orderService.getUserOrders(user.uid);
       setOrders(userOrders);
     } catch (err) {
       console.error("Error al cargar el historial de pedidos:", err);
       setError("No se pudo cargar tu historial de pedidos. Inténtalo de nuevo más tarde.");
-      setOrders([]); // Asegurarse de que la lista esté vacía en caso de error
+      setOrders([]);
     } finally {
       setLoading(false);
     }
-  }, [user]); // Dependencia: user. Si user cambia, la función se recrea.
+  }, [user]);
 
   useEffect(() => {
     fetchUserOrders();
-  }, [fetchUserOrders]); // Se ejecuta cuando fetchUserOrders cambia (o al montar)
+  }, [fetchUserOrders]);
 
   const handleBackButton = () => {
     navigation.goBack();
@@ -56,7 +55,8 @@ export default function OrderHistoryScreen() {
   const renderOrderItem = ({ item }) => (
     <TouchableOpacity
       style={styles.orderCard}
-      // onPress={() => navigation.navigate('OrderDetails', { orderId: item.id })}
+      // Puedes habilitar esto si tienes una pantalla OrderDetails en tu StackNavigator
+      // onPress={() => navigation.navigate('OrderDetails', { orderId: item.id })} 
     >
       <View style={styles.orderHeader}>
         <Text style={styles.orderIdText}>Pedido #{item.id.substring(0, 8).toUpperCase()}</Text>
@@ -103,7 +103,7 @@ export default function OrderHistoryScreen() {
     return (
       <SafeAreaView style={styles.errorContainer}>
         <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity onPress={fetchUserOrders} style={styles.retryButton}> 
+        <TouchableOpacity onPress={fetchUserOrders} style={styles.retryButton}>
           <Text style={styles.retryButtonText}>Reintentar</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -127,7 +127,13 @@ export default function OrderHistoryScreen() {
           <Ionicons name="receipt-outline" size={80} color="#ccc" />
           <Text style={styles.emptyText}>Todavía no has realizado ningún pedido.</Text>
           <Text style={styles.emptySubText}>¡Explora nuestros productos y haz tu primera compra!</Text>
-          <TouchableOpacity style={styles.shopNowButton} onPress={() => navigation.navigate('Home')}>
+          <TouchableOpacity
+            style={styles.shopNowButton}
+            // --- CAMBIO CLAVE AQUÍ ---
+            // Navegamos primero a "Tabs" (el Stack.Screen que contiene tu TabNavigator)
+            // y luego especificamos que queremos ir a la pestaña "Home" dentro de él.
+            onPress={() => navigation.navigate('Tabs', { screen: 'Home' })}
+          >
             <Text style={styles.shopNowButtonText}>Comprar ahora</Text>
           </TouchableOpacity>
         </View>
@@ -144,6 +150,7 @@ export default function OrderHistoryScreen() {
   );
 }
 
+// ... (tus estilos permanecen igual)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -204,7 +211,7 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   headerRight: {
-    width: 28, // Para mantener el título centrado
+    width: 28,
   },
   listContentContainer: {
     paddingHorizontal: 16,
@@ -243,16 +250,16 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   statusPending: {
-    backgroundColor: '#fff3cd', // Amarillo claro
-    color: '#856404', // Amarillo oscuro
+    backgroundColor: '#fff3cd',
+    color: '#856404',
   },
   statusAccepted: {
-    backgroundColor: '#d4edda', // Verde claro
-    color: '#28a745', // Verde oscuro
+    backgroundColor: '#d4edda',
+    color: '#28a745',
   },
   statusRejected: {
-    backgroundColor: '#f8d7da', // Rojo claro
-    color: '#dc3545', // Rojo oscuro
+    backgroundColor: '#f8d7da',
+    color: '#dc3545',
   },
   orderDateText: {
     fontSize: 14,
@@ -288,7 +295,7 @@ const styles = StyleSheet.create({
   productName: {
     fontSize: 14,
     color: '#444',
-    flexShrink: 1, // Permite que el texto se ajuste si es largo
+    flexShrink: 1,
   },
   moreProductsText: {
     fontSize: 13,

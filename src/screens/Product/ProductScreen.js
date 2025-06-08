@@ -172,13 +172,20 @@ export default function ProductScreen({ route, navigation }) {
         backgroundColor="transparent"
         translucent
       />
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <Ionicons name="chevron-back" size={28} color="#000" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{product.name}</Text>
+        <View style={styles.headerRight} /> 
+      </View>
 
       <FlatList
         ListHeaderComponent={
           <>
             {/* ---------- CARRUSEL PRINCIPAL ---------- */}
             <View
-              style={[styles.carouselWrapper, { marginTop: statusBarHeight }]}
+              style={styles.carouselWrapper}
             >
               {imagesArray.length > 0 ? (
                 <FlatList
@@ -192,7 +199,8 @@ export default function ProductScreen({ route, navigation }) {
                     <Image
                       source={{ uri: item }}
                       style={styles.mainImage}
-                      resizeMode="contain"
+                      resizeMode="cover"
+                      backgroundColor="black"
                     />
                   )}
                   onMomentumScrollEnd={onMomentumScrollEnd}
@@ -305,15 +313,9 @@ export default function ProductScreen({ route, navigation }) {
                 </Text>
               )}
 
-              {product.tags?.length > 0 && (
-                <View style={styles.tagsContainer}>
-                  {product.tags.map((tag) => (
-                    <Text key={tag} style={styles.tag}>
-                      #{tag}
-                    </Text>
-                  ))}
-                </View>
-              )}
+              
+               
+              
 
               <View style={styles.bottomSpacer} />
             </View>
@@ -372,16 +374,51 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: getColor("backgroundDefault"),
   },
+  // --- NUEVOS ESTILOS PARA EL ENCABEZADO ---
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: Platform.OS === 'ios' ? 35 :15,
+    paddingHorizontal: 10,
+    paddingVertical: Platform.OS === 'ios' ? 1 : StatusBar.currentHeight - 13, // Ajuste para iOS vs Android
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    backgroundColor: '#fff',
+    // Estilos de posición fija si quieres que se quede arriba al scrollear
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1, // Asegura que esté encima de otros elementos
+  },
+  backButton: {
+    padding: 5,
+    marginTop:10,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginTop:10,
+    color: '#333',
+    flex: 1, // Permite que el título ocupe el espacio restante
+  },
+  headerRight: {
+    width: 28, // Para mantener el título centrado si no hay otro icono a la derecha
+  },
 
   /* ----- CARRUSEL ----- */
   carouselWrapper: {
     width: SCREEN_WIDTH,
-    height: 300,
+    height: 400,
     backgroundColor: "#f9f9f9",
+    paddingTop: Platform.OS === 'ios' ? 60 : StatusBar.currentHeight + 50,
   },
   mainImage: {
     width: SCREEN_WIDTH,
-    height: 300,
+    height: 350,
+    marginTop:Platform.OS === 'ios' ? 0 :  15,
   },
   carouselPlaceholder: {
     justifyContent: "center",
@@ -512,9 +549,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: "rgba(255, 255, 255, 0.95)",
-    paddingHorizontal: 20,
+    paddingHorizontal: Platform.OS === "ios" ? 20 : 0,
     paddingTop: 10,
-    paddingBottom: 20,
+    paddingBottom: Platform.OS === "ios" ? 30 : 20,
     borderTopWidth: 1,
     borderTopColor: "#e0e0e0",
     elevation: 5,
@@ -522,6 +559,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -3 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
+    display: 'flex', // Asegura que se comporte como flexbox
+    flexDirection: 'column', // Los botones ya están apilados verticalmente
+    alignItems: 'center',
+    
   },
   button: {
     borderColor: '#AAB3B9',
@@ -529,8 +570,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingVertical: 12,
     borderRadius: 10,
-
-    width: Platform.OS === "ios" ? "90%" : "100%",
+    width: "90%",
   },
   buttonText: {
     color: "#fff",
