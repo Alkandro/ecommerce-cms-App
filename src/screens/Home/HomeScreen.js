@@ -380,7 +380,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 10,
-    paddingTop: Platform.OS === "ios" ? 20 : -60,
+    paddingTop: Platform.OS === "ios" ? 20 : -30,
     paddingBottom: 5,
     justifyContent: "space-between",
   },
@@ -413,7 +413,7 @@ const styles = StyleSheet.create({
   /* ===== BANNER CARRUSEL (NUEVOS ESTILOS) ===== */
   // Contenedor para el BannerCarousel para posicionarlo correctamente
   bannerContainer: {
-    marginTop: Platform.OS === "ios" ? 110 : 90, // Altura del fixedHeaderContainer + SearchBar
+    marginTop: Platform.OS === "ios" ? 110 : 70, // Altura del fixedHeaderContainer + SearchBar
     height: 180, // Altura del banner
     width: '100%',
     backgroundColor: "#f0f0f0", // Color de fondo si el banner no ocupa todo
@@ -439,7 +439,7 @@ const styles = StyleSheet.create({
   /* ===== SECCIÓN DE PRODUCTOS ===== */
   sectionHeader: {
     paddingHorizontal: 16,
-    paddingTop: 1,
+    paddingTop:Platform.OS === "ios" ? 0 : -30,
     paddingBottom: 10,
   },
   sectionTitle: {

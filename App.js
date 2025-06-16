@@ -1,4 +1,3 @@
-// App.js
 import React, { useEffect, useRef } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import StackNavigator from "./src/navigation/StackNavigator";
@@ -7,6 +6,7 @@ import { CartProvider } from "./src/context/CartContext";
 import { View, ActivityIndicator, StyleSheet, AppState } from "react-native";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from './src/firebase/firebaseConfig';
+import { StripeProvider } from '@stripe/stripe-react-native';
 
 function InitialLoader() {
   const { loading, user } = useAuth();
@@ -53,26 +53,32 @@ function InitialLoader() {
       </View>
     );
   }
+
   return <StackNavigator />;
 }
 
 export default function App() {
   return (
-    <AuthProvider>
-      {/* Ahora envuelves también con SearchProvider y CartProvider */}
-      {/* <SearchProvider> */}
+    <StripeProvider
+      publishableKey="pk_test_51QrcAFBArP6IIIPdt7cv4RNQWz5k49FXInfgZgcRJ9zwPuQFPKSlXPwiLJuzjl003PQBIA9zQkM8jVZW1eQzEtm500eYGOMRti" // <- tu clave pública aquí
+      merchantIdentifier="merchant.com.tuapp" // requerido para Apple Pay (puede ser cualquier string único)
+    >
+      <AuthProvider>
         <CartProvider>
           <NavigationContainer>
             <InitialLoader />
           </NavigationContainer>
         </CartProvider>
-      {/* </SearchProvider> */}
-    </AuthProvider>
+      </AuthProvider>
+    </StripeProvider>
   );
 }
 
 const styles = StyleSheet.create({
   loadingContainer: {
-    flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f4f6f8',
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f4f6f8',
   },
 });

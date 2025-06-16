@@ -11,11 +11,12 @@ import OrderScreen from "../screens/Order/OrderScreen";
 import EditProfileScreen from "../screens/Profile/EditProfileScreen";
 import AddressesScreen from "../screens/Profile/AddressesScreen";
 import EditAddressScreen from "../screens/Profile/EditAddressScreen";
-import ProfileDetailsScreen from '../screens/Profile/ProfileDetailsScreen';
+import ProfileDetailsScreen from "../screens/Profile/ProfileDetailsScreen";
 import OrderHistoryScreen from "../screens/Order/OrderHistoryScreen";
-import NotificationsScreen from '../screens/Notifications/NotificationsScreen';
+import NotificationsScreen from "../screens/Notifications/NotificationsScreen";
 import TermsConditionsScreen from "../screens/TermsConditionsScreen/TermsConditionsScreen";
-import HomeScreen from"../screens/Home/HomeScreen";
+import HomeScreen from "../screens/Home/HomeScreen";
+import PaymentMethodsScreen from "../screens/Payments/PaymentMethodsScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -34,8 +35,14 @@ export default function StackNavigator() {
           <Stack.Screen name="Tabs" component={TabNavigator} />
           <Stack.Screen name="ProductDetail" component={ProductScreen} />
           <Stack.Screen name="OrderScreen" component={OrderScreen} />
-          <Stack.Screen name="EditProfileScreen" component={EditProfileScreen}/>
-          <Stack.Screen name="ProfileDetailsScreen" component={ProfileDetailsScreen} />
+          <Stack.Screen
+            name="EditProfileScreen"
+            component={EditProfileScreen}
+          />
+          <Stack.Screen
+            name="ProfileDetailsScreen"
+            component={ProfileDetailsScreen}
+          />
           <Stack.Screen name="Notifications" component={NotificationsScreen} />
           <Stack.Screen name="AddressesScreen" component={AddressesScreen} />
           <Stack.Screen name="OrderHistory" component={OrderHistoryScreen} />
@@ -44,6 +51,12 @@ export default function StackNavigator() {
             name="EditAddressScreen"
             component={EditAddressScreen}
           />
+          <Stack.Screen
+            name="PaymentMethods"
+            component={PaymentMethodsScreen}
+            options={{ title: "Métodos de Pago" }}
+          />
+
           <Stack.Screen
             name="TermsConditions"
             component={TermsConditionsScreen}

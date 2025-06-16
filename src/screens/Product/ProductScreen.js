@@ -14,7 +14,7 @@ import {
   ActivityIndicator,
   Dimensions,
   Animated,
-  ScrollView,         // <-- Importamos ScrollView para las miniaturas
+  ScrollView, // <-- Importamos ScrollView para las miniaturas
 } from "react-native";
 import COLORS from "../../../constants/colors";
 import { useAuth } from "../../context/AuthContext";
@@ -173,20 +173,21 @@ export default function ProductScreen({ route, navigation }) {
         translucent
       />
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
           <Ionicons name="chevron-back" size={28} color="#000" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{product.name}</Text>
-        <View style={styles.headerRight} /> 
+        <View style={styles.headerRight} />
       </View>
 
       <FlatList
         ListHeaderComponent={
           <>
             {/* ---------- CARRUSEL PRINCIPAL ---------- */}
-            <View
-              style={styles.carouselWrapper}
-            >
+            <View style={styles.carouselWrapper}>
               {imagesArray.length > 0 ? (
                 <FlatList
                   ref={flatListRef}
@@ -212,9 +213,7 @@ export default function ProductScreen({ route, navigation }) {
                   })}
                 />
               ) : (
-                <View
-                  style={[styles.mainImage, styles.carouselPlaceholder]}
-                >
+                <View style={[styles.mainImage, styles.carouselPlaceholder]}>
                   <Text style={styles.placeholderText}>Sin imagen</Text>
                 </View>
               )}
@@ -262,7 +261,7 @@ export default function ProductScreen({ route, navigation }) {
                   <>
                     <View style={styles.oldPriceContainerScreen}>
                       <Text style={styles.oldPriceScreen}>
-                        ${product.price.toFixed(2)}
+                      ¥{product.price.toFixed(2)}
                       </Text>
                       <Text style={styles.discountPercentageScreen}>
                         -{product.discount}%
@@ -271,10 +270,10 @@ export default function ProductScreen({ route, navigation }) {
                     <Animated.Text
                       style={[styles.newPriceScreen, animatedPriceStyle]}
                     >
-                      ${(
-                        product.price *
-                        (1 - product.discount / 100)
-                      ).toFixed(2)}
+                      ¥
+                      {(product.price * (1 - product.discount / 100)).toFixed(
+                        2
+                      )}
                     </Animated.Text>
                   </>
                 ) : (
@@ -283,7 +282,7 @@ export default function ProductScreen({ route, navigation }) {
                   </Text>
                 )}
               </View>
-              {/* ----------------------------------------- */}
+              
 
               {product.rating > 0 && (
                 <View style={styles.ratingContainer}>
@@ -312,10 +311,6 @@ export default function ProductScreen({ route, navigation }) {
                     : "Agotado"}
                 </Text>
               )}
-
-              
-               
-              
 
               <View style={styles.bottomSpacer} />
             </View>
@@ -376,17 +371,17 @@ const styles = StyleSheet.create({
   },
   // --- NUEVOS ESTILOS PARA EL ENCABEZADO ---
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: Platform.OS === 'ios' ? 35 :15,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: Platform.OS === "ios" ? 35 : 15,
     paddingHorizontal: 10,
-    paddingVertical: Platform.OS === 'ios' ? 1 : StatusBar.currentHeight - 13, // Ajuste para iOS vs Android
+    paddingVertical: Platform.OS === "ios" ? 1 : StatusBar.currentHeight - 13, // Ajuste para iOS vs Android
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-    backgroundColor: '#fff',
+    borderBottomColor: "#e0e0e0",
+    backgroundColor: "#fff",
     // Estilos de posición fija si quieres que se quede arriba al scrollear
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
@@ -394,14 +389,14 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: 5,
-    marginTop:10,
+    marginTop: 10,
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginTop:10,
-    color: '#333',
+    fontWeight: "bold",
+    textAlign: "center",
+    marginTop: 10,
+    color: "#333",
     flex: 1, // Permite que el título ocupe el espacio restante
   },
   headerRight: {
@@ -413,12 +408,12 @@ const styles = StyleSheet.create({
     width: SCREEN_WIDTH,
     height: 400,
     backgroundColor: "#f9f9f9",
-    paddingTop: Platform.OS === 'ios' ? 60 : StatusBar.currentHeight + 50,
+    paddingTop: Platform.OS === "ios" ? 60 : StatusBar.currentHeight + 50,
   },
   mainImage: {
     width: SCREEN_WIDTH,
     height: 350,
-    marginTop:Platform.OS === 'ios' ? 0 :  15,
+    marginTop: Platform.OS === "ios" ? 0 : 15,
   },
   carouselPlaceholder: {
     justifyContent: "center",
@@ -559,14 +554,13 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -3 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
-    display: 'flex', // Asegura que se comporte como flexbox
-    flexDirection: 'column', // Los botones ya están apilados verticalmente
-    alignItems: 'center',
-    
+    display: "flex", // Asegura que se comporte como flexbox
+    flexDirection: "column", // Los botones ya están apilados verticalmente
+    alignItems: "center",
   },
   button: {
-    borderColor: '#AAB3B9',
-    backgroundColor:"#055F68",
+    borderColor: "#AAB3B9",
+    backgroundColor: "#055F68",
     marginTop: 8,
     paddingVertical: 12,
     borderRadius: 10,

@@ -9,18 +9,20 @@ import {
   TouchableOpacity,
   Dimensions,
   Animated,
-  ScrollView, // <-- Importar ScrollView
+  ScrollView,
+  Easing,
 } from "react-native";
 import { fn } from "../utils";
+import { useSharedValue, useAnimatedStyle, withTiming, withRepeat } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-// El ancho de cada tarjeta, igual que en HomeScreen
 export const CARD_WIDTH = (SCREEN_WIDTH - 16 * 2 - 16) / 2;
 
-export function ProductCard({ product, onPress }) {
-  // 1) Construir el array de URLs de imágenes:
-  //    - Si product.images existe y no está vacío, lo usamos.
-  //    - En otro caso, caemos en coverImage o en image.
+export function ProductCard({ product, onPress,
+  startColor = '#16222b',
+  highlightColor = '#f57c00',
+}) {
+  const pulse = useRef(new Animated.Value(0)).current;
   const imagesArray =
     Array.isArray(product.images) && product.images.length > 0
       ? product.images
@@ -30,50 +32,60 @@ export function ProductCard({ product, onPress }) {
       ? [product.image]
       : [];
 
-  // 2) Estado para saber qué índice de imagen está activa
   const [activeIndex, setActiveIndex] = useState(0);
-
-  // 3) Referencia al FlatList para poder hacer scroll programático al pulsar miniatura
   const flatListRef = useRef(null);
 
-  // 4) Animación “pulse” para precio con descuento (opcional)
   const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // --- CAMBIO CLAVE AQUÍ ---
   useEffect(() => {
     if (product.discount > 0) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.1,
-            duration: 500,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 500,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
+      // Reiniciar valor
+      pulse.setValue(0);
+      // Loop infinito de 0→1 en 1000ms
+      const loop = Animated.loop(
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 1000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false, // JS-driven para poder animar color
+        })
+      );
+      loop.start();
+      return () => loop.stop();
     } else {
-      pulseAnim.setValue(1);
+      pulse.stopAnimation();
+      pulse.setValue(0);
     }
-  }, [product.discount, pulseAnim]);
+  }, [product.discount, pulse]);
+
+  // Interpolar escala: 0→0.5→1  mapea 1→1.1→1
+  const scale = pulse.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [1, 1.1, 1],
+  });
+
+  // Interpolar color: 0→0.5→1  mapea azul→naranja→azul
+  const color = pulse.interpolate({
+    inputRange: [0, 0.5, 1],
+    // outputRange: ["#16222b", "#f57c00", "#16222b"],
+    outputRange: [startColor, highlightColor, startColor],
+  });
+  // --- FIN CAMBIO CLAVE ---
 
   const animatedPriceStyle = {
     transform: [{ scale: pulseAnim }],
+    alignSelf: "center",
   };
 
-  // 5) Cuando termine el momentum del scroll, calcular el índice activo
   const onMomentumScrollEnd = (event) => {
     const offsetX = event.nativeEvent.contentOffset.x;
     const newIndex = Math.round(offsetX / CARD_WIDTH);
     setActiveIndex(newIndex);
   };
 
-  // 6) Si el arreglo está vacío, mostrar placeholder
   const hasImages = imagesArray.length > 0;
 
-  // 7) Construir el contenido de la tarjeta
   const content = (
     <View style={styles.card}>
       {/* ---------- SLIDER PRINCIPAL ---------- */}
@@ -135,7 +147,6 @@ export function ProductCard({ product, onPress }) {
             <TouchableOpacity
               key={idx}
               onPress={() => {
-                // Al pulsar una miniatura, mover el FlatList principal a esa posición
                 flatListRef.current?.scrollToOffset({
                   offset: CARD_WIDTH * idx,
                   animated: true,
@@ -168,20 +179,23 @@ export function ProductCard({ product, onPress }) {
           <>
             <View style={styles.oldPriceContainer}>
               <Text style={[styles.oldPrice, styles.oldPriceDiscounted]}>
-                {product.price}¥
+              ¥{product.price}
               </Text>
               <Text style={styles.discountPercentage}>
                 -{product.discount}%
               </Text>
             </View>
             <Animated.Text
-              style={[styles.price, styles.newPriceDiscounted, animatedPriceStyle]}
-            >
-              {fn.calcPrice(product.price, product.discount)}¥
+          style={[
+            styles.price,
+            { transform: [{ scale }], color },
+          ]}
+        >
+              ¥{fn.calcPrice(product.price, product.discount)}
             </Animated.Text>
           </>
         ) : (
-          <Text style={styles.price}>{product.price}¥</Text>
+          <Text style={[styles.price, { alignSelf: 'center' }]}>¥{product.price}</Text>
         )}
       </View>
     </View>
@@ -277,14 +291,14 @@ const styles = StyleSheet.create({
   /* ---------- PRECIOS ---------- */
   priceContainer: {
     flexDirection: "column",
-    alignItems: "flex-start",
+    alignItems: "center",
     paddingHorizontal: 8,
-    marginTop: 2,
+    marginTop: -4,
   },
   oldPriceContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 6,
+    marginBottom: 8,
   },
   oldPrice: {
     textDecorationLine: "line-through",
@@ -293,6 +307,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   oldPriceDiscounted: {
+    
    
   },
   discountPercentage: {
@@ -304,9 +319,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#16222b",
     fontWeight: "bold",
+    marginBottom: 14,
+    
   },
   newPriceDiscounted: {
     color: "blue",
     marginBottom: 8,
   },
 });
+
