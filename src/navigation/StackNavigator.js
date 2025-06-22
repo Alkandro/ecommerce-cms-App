@@ -17,6 +17,7 @@ import NotificationsScreen from "../screens/Notifications/NotificationsScreen";
 import TermsConditionsScreen from "../screens/TermsConditionsScreen/TermsConditionsScreen";
 import HomeScreen from "../screens/Home/HomeScreen";
 import PaymentMethodsScreen from "../screens/Payments/PaymentMethodsScreen";
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 const Stack = createNativeStackNavigator();
 
@@ -24,6 +25,7 @@ export default function StackNavigator() {
   const { user } = useAuth();
 
   return (
+    <SafeAreaProvider>
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {!user ? (
         <>
@@ -64,5 +66,6 @@ export default function StackNavigator() {
         </>
       )}
     </Stack.Navigator>
+    </SafeAreaProvider>
   );
 }

@@ -32,7 +32,7 @@ import { termsConditionsService } from "../../services/termsConditionsService";
 import Toast from "react-native-root-toast";
 import { ProductCard } from "../../components/ProductCard";
 import { useIsFocused } from "@react-navigation/native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get("window");
 const homeCardMargin = 5;
@@ -43,7 +43,7 @@ const homeCardWidth =
 export default function HomeScreen({ navigation }) {
   const { user, userProfile, refreshUserProfile } = useAuth();
   const isFocused = useIsFocused();
-
+  const insets = useSafeAreaInsets();
   const [products, setProducts] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [search, setSearch] = useState("");
@@ -576,3 +576,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
 });
+
+
+

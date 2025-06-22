@@ -94,17 +94,48 @@ export default function ProductScreen({ route, navigation }) {
     checkFavoriteStatus();
   }, [user, product]);
 
+  // const handleAddToCart = () => {
+  //   if (product) {
+  //     addToCart(product);
+  //     Toast.show(`${product.name} añadido al carrito!`, {
+  //       position: Toast.positions.CENTER,
+  //     });
+  //     navigation.navigate("OrderScreen");
+  //   } else {
+  //     Alert.alert("Error", "No se pudo añadir el producto al carrito.");
+  //   }
+  // };
   const handleAddToCart = () => {
-    if (product) {
-      addToCart(product);
-      Toast.show(`${product.name} añadido al carrito!`, {
-        position: Toast.positions.CENTER,
-      });
-      navigation.navigate("OrderScreen");
-    } else {
-      Alert.alert("Error", "No se pudo añadir el producto al carrito.");
+    if (!product) {
+      return Alert.alert("Error", "No se pudo añadir el producto al carrito.");
     }
+  
+    // 1) Imagen seleccionada en el carrusel:
+    const imageForCart = imagesArray[activeIndex] || product.image;
+  
+    // 2) Precio con descuento (o el original si no hay descuento):
+    const discountedPrice =
+      product.discount > 0
+        ? Number((product.price * (1 - product.discount / 100)).toFixed(2))
+        : product.price;
+  
+    // 3) Creamos un objeto "producto para el carrito" inyectando imagen y precio rebajado:
+    const productForCart = {
+      ...product,
+      price: discountedPrice,
+      image: imageForCart,
+    };
+  
+    // 4) Lo añadimos al carrito:
+    addToCart(productForCart);
+  
+    // 5) Feedback y navegación:
+    Toast.show(`${product.name} añadido al carrito!`, {
+      position: Toast.positions.CENTER,
+    });
+    navigation.navigate("OrderScreen");
   };
+  
 
   const handleToggleWishlist = async () => {
     if (!user) {

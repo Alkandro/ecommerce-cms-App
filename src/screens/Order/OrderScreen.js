@@ -397,9 +397,14 @@ export default function OrderScreen() {
             <View style={s.row}>
               <Image source={{ uri: item.product.image }} style={s.img} />
               <View style={s.info}>
-                <Text style={s.name}>{item.product.name}</Text>
+                <Text 
+                style={s.name}
+                numberOfLines={2}         // hasta 2 líneas
+                ellipsizeMode="tail"      // recorta con “…” si sobrepasa
+                >
+                  {item.product.name}</Text>
                 <Text>
-                  {item.product.price}€ × {item.quantity}
+                  {item.product.price.toFixed(2)}€ × {item.quantity}
                 </Text>
               </View>
               <View style={s.qty}>
@@ -567,7 +572,7 @@ const s = StyleSheet.create({
   row: { 
     flexDirection: "row", 
     alignItems: "center", 
-    // marginBottom: 12 
+    flexWrap: "wrap",
   },
   img: { 
     width: 80, 
@@ -576,12 +581,15 @@ const s = StyleSheet.create({
     margin: 12 
   },
   info: { 
-    flex: 2,
+    flex: 1,
+    flexShrink: 1,          // <-- puede encogerse si hace falta
+    marginRight: 8,
     justifyContent: "center", 
   },
   name: { 
     fontWeight: "bold",
-    marginBottom: 4, 
+    marginBottom: 4,
+    flexShrink: 1,          // <-- el propio Text puede encogerse 
   },
   qty: { 
     flexDirection: "row", 
