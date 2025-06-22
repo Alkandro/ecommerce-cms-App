@@ -7,12 +7,20 @@ import {
   ActivityIndicator,
   StyleSheet,
   Alert,
+  StatusBar,
   TouchableOpacity,
   Image,
   Platform,
   Dimensions,
 } from "react-native";
-import { collection, onSnapshot, query, where, doc, getDoc } from "firebase/firestore";
+import {
+  collection,
+  onSnapshot,
+  query,
+  where,
+  doc,
+  getDoc,
+} from "firebase/firestore";
 import { db } from "../../firebase/firebaseConfig";
 import { SearchBar } from "../../components/SearchBar";
 import { BannerCarousel } from "../../components/BannerCarousel"; // Asegúrate de que este componente exista y funcione bien
@@ -24,12 +32,13 @@ import { termsConditionsService } from "../../services/termsConditionsService";
 import Toast from "react-native-root-toast";
 import { ProductCard } from "../../components/ProductCard";
 import { useIsFocused } from "@react-navigation/native";
-
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const { width } = Dimensions.get("window");
 const homeCardMargin = 5;
 const homeNumColumns = 2;
-const homeCardWidth = (width / homeNumColumns) - (homeCardMargin * homeNumColumns * 2);
+const homeCardWidth =
+  width / homeNumColumns - homeCardMargin * homeNumColumns * 2;
 
 export default function HomeScreen({ navigation }) {
   const { user, userProfile, refreshUserProfile } = useAuth();
@@ -98,12 +107,16 @@ export default function HomeScreen({ navigation }) {
     let unsubscribeWishlist = () => {};
     if (user) {
       const wishlistRef = collection(db, "users", user.uid, "wishlist");
-      unsubscribeWishlist = onSnapshot(wishlistRef, (snapshot) => {
-        const ids = new Set(snapshot.docs.map(doc => doc.id));
-        setWishlistProductIds(ids);
-      }, (error) => {
-        console.error("Error cargando wishlist en tiempo real:", error);
-      });
+      unsubscribeWishlist = onSnapshot(
+        wishlistRef,
+        (snapshot) => {
+          const ids = new Set(snapshot.docs.map((doc) => doc.id));
+          setWishlistProductIds(ids);
+        },
+        (error) => {
+          console.error("Error cargando wishlist en tiempo real:", error);
+        }
+      );
     } else {
       setWishlistProductIds(new Set());
     }
@@ -114,10 +127,13 @@ export default function HomeScreen({ navigation }) {
   useEffect(() => {
     let unsubscribeNotifications;
     if (user?.uid) {
-      unsubscribeNotifications = notificationService.getUserNotifications(user.uid, (notifications) => {
-        const unreadCount = notifications.filter(n => !n.read).length;
-        setUnreadNotificationsCount(unreadCount);
-      });
+      unsubscribeNotifications = notificationService.getUserNotifications(
+        user.uid,
+        (notifications) => {
+          const unreadCount = notifications.filter((n) => !n.read).length;
+          setUnreadNotificationsCount(unreadCount);
+        }
+      );
     } else {
       setUnreadNotificationsCount(0);
     }
@@ -149,7 +165,8 @@ export default function HomeScreen({ navigation }) {
         return;
       }
       try {
-        const { lastUpdated } = await termsConditionsService.getTermsAndConditions();
+        const { lastUpdated } =
+          await termsConditionsService.getTermsAndConditions();
         const viewedAt = userProfile?.lastViewedTerms?.toDate();
         const hasNew = !viewedAt || lastUpdated.getTime() > viewedAt.getTime();
         setNewTermsAvailable(Boolean(hasNew));
@@ -158,7 +175,9 @@ export default function HomeScreen({ navigation }) {
       }
     };
     if (isFocused) {
-      refreshUserProfile().then(checkTerms).catch(() => checkTerms());
+      refreshUserProfile()
+        .then(checkTerms)
+        .catch(() => checkTerms());
     }
   }, [userProfile, isFocused, user]);
 
@@ -183,20 +202,29 @@ export default function HomeScreen({ navigation }) {
   const handleBannerPress = async (banner) => {
     if (banner.productId) {
       try {
-        const productRef = doc(db, 'products', banner.productId);
+        const productRef = doc(db, "products", banner.productId);
         const productSnap = await getDoc(productRef);
 
         if (productSnap.exists()) {
           const productData = { id: productSnap.id, ...productSnap.data() };
-          console.log("Navegando a ProductDetail con producto:", productData.name);
+          console.log(
+            "Navegando a ProductDetail con producto:",
+            productData.name
+          );
           navigation.navigate("ProductDetail", { product: productData });
         } else {
           console.warn(`Producto con ID ${banner.productId} no encontrado.`);
-          Alert.alert("Error", "El producto asociado a este banner no está disponible.");
+          Alert.alert(
+            "Error",
+            "El producto asociado a este banner no está disponible."
+          );
         }
       } catch (error) {
         console.error("Error al cargar el producto desde el banner:", error);
-        Alert.alert("Error", "No se pudo cargar el producto. Inténtalo de nuevo.");
+        Alert.alert(
+          "Error",
+          "No se pudo cargar el producto. Inténtalo de nuevo."
+        );
       }
     } else {
       console.log("Este banner no tiene un producto asociado.");
@@ -207,7 +235,10 @@ export default function HomeScreen({ navigation }) {
   // 9) Agregar / quitar favorito
   const handleFavoritePress = async (product) => {
     if (!user) {
-      Alert.alert("Inicio de Sesión Requerido", "Debes iniciar sesión para gestionar favoritos.");
+      Alert.alert(
+        "Inicio de Sesión Requerido",
+        "Debes iniciar sesión para gestionar favoritos."
+      );
       return;
     }
     try {
@@ -215,21 +246,27 @@ export default function HomeScreen({ navigation }) {
 
       if (isCurrentlyInWishlist) {
         await wishlistService.removeProductFromWishlist(user.uid, product.id);
-        Toast.show(`${product.name} eliminado de favoritos`, { position: Toast.positions.CENTER });
+        Toast.show(`${product.name} eliminado de favoritos`, {
+          position: Toast.positions.CENTER,
+        });
       } else {
         await wishlistService.addProductToWishlist(user.uid, product.id);
-        Toast.show(`${product.name} añadido a favoritos`, { position: Toast.positions.CENTER });
+        Toast.show(`${product.name} añadido a favoritos`, {
+          position: Toast.positions.CENTER,
+        });
       }
     } catch (error) {
       console.error("Error al gestionar favoritos:", error);
-      Toast.show("Error al gestionar favoritos", { position: Toast.positions.CENTER });
+      Toast.show("Error al gestionar favoritos", {
+        position: Toast.positions.CENTER,
+      });
     }
   };
 
   // 10) Navegar al perfil
-  const irAlUsuerProfile=() => {
-    navigation.navigate("ProfileDetailsScreen")
-  }
+  const irAlUsuerProfile = () => {
+    navigation.navigate("ProfileDetailsScreen");
+  };
   // 11) Navegar a notificaciones
   const handleNotificationPress = () => {
     navigation.navigate("Notifications");
@@ -253,7 +290,11 @@ export default function HomeScreen({ navigation }) {
           style={styles.favoriteButton}
           onPress={() => handleFavoritePress(item)}
         >
-          <Ionicons name={isFavorite ? "heart" : "heart-outline"} size={24} color={isFavorite ? "#e53935" : "#000"} />
+          <Ionicons
+            name={isFavorite ? "heart" : "heart-outline"}
+            size={24}
+            color={isFavorite ? "#e53935" : "#000"}
+          />
         </TouchableOpacity>
       </View>
     );
@@ -263,22 +304,15 @@ export default function HomeScreen({ navigation }) {
     <View style={styles.container}>
       <View style={styles.fixedHeaderContainer}>
         <View style={styles.header}>
-        <View style={styles.buscador} >
-        <SearchBar
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Buscar productos..."
-          inputRef={searchInputRef}
-        />
-         </View >
-         
-
-         
-          <View style={styles.searchContainer}>
-           
+          <View style={styles.buscador}>
+            <SearchBar
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Buscar productos..."
+              inputRef={searchInputRef}
+            />
           </View>
 
-          
           <TouchableOpacity
             style={styles.notificationButton}
             onPress={handleNotificationPress}
@@ -291,7 +325,6 @@ export default function HomeScreen({ navigation }) {
             )}
           </TouchableOpacity>
 
-          
           <TouchableOpacity
             style={styles.profileButton}
             onPress={irAlUsuerProfile}
@@ -310,18 +343,15 @@ export default function HomeScreen({ navigation }) {
             )}
           </TouchableOpacity>
         </View>
-
-       
       </View>
 
-      
       {loadingBanners ? (
         <ActivityIndicator
           color="#16222b"
           style={styles.bannerLoadingIndicator} // Nuevo estilo para posicionar correctamente
         />
       ) : (
-        <View style={styles.bannerContainer}> 
+        <View style={styles.bannerContainer}>
           <BannerCarousel
             data={banners}
             onPressItem={handleBannerPress}
@@ -380,42 +410,39 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 10,
-    paddingTop: Platform.OS === "ios" ? 20 : -30,
+    paddingTop: Platform.OS === "ios" ? 20 : 20,
     paddingBottom: 5,
     justifyContent: "space-between",
   },
   buscador: {
     padding: 1,
-    margin:-50,
-    
-    marginTop: Platform.OS === "ios" ? 40 : 25,
+    margin: -50,
+
+    marginTop: Platform.OS === "ios" ? 40 : 20,
   },
   menuButton: {
     padding: 5,
-    marginTop: Platform.OS === "ios" ? 40 : 25,
-  },
-  searchContainer: {
-    flex: 1,
-    alignItems: "center",
-    marginTop: Platform.OS === "ios" ? 40 : 25,
+    marginTop: Platform.OS === "ios" ? 40 : 20,
+
   },
 
   notificationButton: {
     padding: 5,
-    marginTop: Platform.OS === "ios" ? 40 : 25,
-    position: 'relative',
+    marginTop: Platform.OS === "ios" ? 40 : 20,
+    position: "relative",
+    paddingLeft:45,
   },
   profileButton: {
     padding: 5,
-    marginTop: Platform.OS === "ios" ? 40 : 25,
+    marginTop: Platform.OS === "ios" ? 40 : 20,
   },
 
   /* ===== BANNER CARRUSEL (NUEVOS ESTILOS) ===== */
   // Contenedor para el BannerCarousel para posicionarlo correctamente
   bannerContainer: {
-    marginTop: Platform.OS === "ios" ? 110 : 70, // Altura del fixedHeaderContainer + SearchBar
-    height: 180, // Altura del banner
-    width: '100%',
+    marginTop: Platform.OS === "ios" ? 100 : 80, // Altura del fixedHeaderContainer + SearchBar
+    height: 160, // Altura del banner
+    width: "100%",
     backgroundColor: "#f0f0f0", // Color de fondo si el banner no ocupa todo
   },
   bannerLoadingIndicator: {
@@ -439,7 +466,7 @@ const styles = StyleSheet.create({
   /* ===== SECCIÓN DE PRODUCTOS ===== */
   sectionHeader: {
     paddingHorizontal: 16,
-    paddingTop:Platform.OS === "ios" ? 0 : -30,
+    paddingTop: Platform.OS === "ios" ? 0 : -30,
     paddingBottom: 10,
   },
   sectionTitle: {
@@ -449,7 +476,7 @@ const styles = StyleSheet.create({
   },
   row: {
     justifyContent: "space-around",
-    
+
     marginBottom: 16,
     paddingHorizontal: homeCardMargin / 2,
   },

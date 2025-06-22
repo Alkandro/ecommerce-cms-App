@@ -56,6 +56,7 @@ export default function TabNavigator() {
         headerShown: false,
         tabBarActiveTintColor: "blue",
         tabBarInactiveTintColor: "gray",
+        
         tabBarIcon: ({ color, size }) => {
           let iconName;
           if (route.name === "Home") iconName = "home-outline";
