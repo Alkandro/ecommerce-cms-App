@@ -22,8 +22,7 @@ import { doc, onSnapshot, getDoc } from "firebase/firestore";
 import { db } from "../../firebase/firebaseConfig";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
-import {initPaymentSheet,presentPaymentSheet} from '@stripe/stripe-react-native';
-
+import { initPaymentSheet, presentPaymentSheet } from "@stripe/stripe-react-native";
 
 const LAST_ORDER_ID_KEY = "@lastOrderId";
 
@@ -34,60 +33,134 @@ export default function OrderScreen() {
 
   const [addresses, setAddresses] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState(null);
-  const [acceptedItems, setAcceptedItems] = useState({});
   const [currentOrderId, setCurrentOrderId] = useState(null);
   const [orderStatusFromDb, setOrderStatusFromDb] = useState(null);
   const [loading, setLoading] = useState(false);
   const [addressLoading, setAddressLoading] = useState(true);
   const [latestTermsLastUpdated, setLatestTermsLastUpdated] = useState(null);
 
+  // 1) Carga inicial de direcciones y último pedido
+  useEffect(() => {
+    const loadInitialData = async () => {
+      setAddressLoading(true);
+      if (user?.uid) {
+        try {
+          const list = await addressService.getUserAddresses(user.uid);
+          setAddresses(list);
+          setSelectedAddress(list.find((a) => a.isDefault) || list[0] || null);
+        } catch (err) {
+          console.error(err);
+          Alert.alert("Error", "No se pudieron cargar tus direcciones.");
+        }
+      }
+      setAddressLoading(false);
+
+      try {
+        const storedId = await AsyncStorage.getItem(LAST_ORDER_ID_KEY);
+        if (storedId) setCurrentOrderId(storedId);
+      } catch (err) {
+        console.error("Error leyendo último pedido:", err);
+      }
+    };
+    loadInitialData();
+  }, [user?.uid]);
+
+  // 2) Escucha de estado del pedido
+  useEffect(() => {
+    if (!currentOrderId || !user?.uid) return;
+
+    const orderRef = doc(db, "orders", currentOrderId);
+    let unsubscribe;
+
+    (async () => {
+      try {
+        const snap = await getDoc(orderRef);
+        if (!snap.exists()) {
+          setCurrentOrderId(null);
+          await AsyncStorage.removeItem(LAST_ORDER_ID_KEY);
+          return;
+        }
+        unsubscribe = onSnapshot(
+          orderRef,
+          (docSnap) => {
+            const data = docSnap.data();
+            setOrderStatusFromDb(data.status);
+            if (["accepted", "rejected"].includes(data.status)) {
+              setCurrentOrderId(null);
+              setOrderStatusFromDb(null);
+              AsyncStorage.removeItem(LAST_ORDER_ID_KEY);
+            }
+          },
+          (err) => {
+            console.error(err);
+            setOrderStatusFromDb("error");
+          }
+        );
+      } catch (e) {
+        console.error(e);
+        setOrderStatusFromDb("error");
+        setCurrentOrderId(null);
+        await AsyncStorage.removeItem(LAST_ORDER_ID_KEY);
+      }
+    })();
+
+    return () => unsubscribe && unsubscribe();
+  }, [currentOrderId, user?.uid]);
+
+  // 3) Fecha de T&C
+  useEffect(() => {
+    termsConditionsService
+      .getTermsAndConditions()
+      .then(({ lastUpdated }) => setLatestTermsLastUpdated(lastUpdated))
+      .catch(console.error);
+  }, []);
+
+  // Helpers de Stripe
   const fetchPaymentSheetParams = async () => {
     try {
-      const response = await fetch('https://us-central1-ecommerce-cms-578f4.cloudfunctions.net/createPaymentIntent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: Math.round(total * 100) }), // en centavos
-      });
-  
-      const { paymentIntent, ephemeralKey, customer } = await response.json();
-      return { paymentIntent, ephemeralKey, customer };
-    } catch (error) {
-      console.error('Error al obtener parámetros de pago:', error);
-      Alert.alert('Error', 'No se pudo iniciar el pago.');
+      const res = await fetch(
+        "https://us-central1-ecommerce-cms-578f4.cloudfunctions.net/createPaymentIntent",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount: Math.round(total * 100) }),
+        }
+      );
+      return await res.json();
+    } catch (e) {
+      console.error(e);
+      Alert.alert("Error", "No se pudo iniciar el pago.");
       return null;
     }
   };
-  
+
   const startStripePayment = async (itemsForOrder) => {
     setLoading(true);
-    try {
-      const result = await fetchPaymentSheetParams();
-      if (!result) return;
-  
-      const { paymentIntent, ephemeralKey, customer } = result;
-  
-      const { error: initError } = await initPaymentSheet({
-        merchantDisplayName: 'Mi Tienda de Prueba',
-        customerId: customer,
-        customerEphemeralKeySecret: ephemeralKey,
-        paymentIntentClientSecret: paymentIntent,
-        allowsDelayedPaymentMethods: true,
-      });
-  
-      if (initError) {
-        console.error(initError);
-        Alert.alert('Error', 'No se pudo inicializar el pago.');
-        return;
-      }
-  
-      const { error: presentError } = await presentPaymentSheet();
-  
-      if (presentError) {
-        Alert.alert('Pago cancelado o fallido', presentError.message);
-      } else {
-        Alert.alert('✅ Pago exitoso', 'Gracias por tu compra!');
-  
-        // Guardar pedido en Firestore solo si el pago fue exitoso
+    const params = await fetchPaymentSheetParams();
+    if (!params) {
+      setLoading(false);
+      return;
+    }
+
+    const { error: initError } = await initPaymentSheet({
+      merchantDisplayName: "Mi Tienda de Prueba",
+      customerId: params.customer,
+      customerEphemeralKeySecret: params.ephemeralKey,
+      paymentIntentClientSecret: params.paymentIntent,
+      allowsDelayedPaymentMethods: true,
+    });
+    if (initError) {
+      Alert.alert("Error", "No se pudo inicializar el pago.");
+      setLoading(false);
+      return;
+    }
+
+    const { error: presentError } = await presentPaymentSheet();
+    if (presentError) {
+      Alert.alert("Pago fallido", presentError.message);
+    } else {
+      Alert.alert("✅ Pago exitoso", "Gracias por tu compra!");
+      try {
         const ref = await orderService.createOrder({
           userId: user.uid,
           userName: user.displayName || user.email,
@@ -98,356 +171,130 @@ export default function OrderScreen() {
           totalAmount: total,
           status: "paid",
           createdAt: new Date(),
-          paymentIntentId: paymentIntent, // opcional para debug o futuras consultas
+          paymentIntentId: params.paymentIntent,
         });
-  
-        console.log("Pedido pagado creado con ID:", ref.id);
-  
         setCurrentOrderId(ref.id);
         setOrderStatusFromDb("paid");
         await AsyncStorage.setItem(LAST_ORDER_ID_KEY, ref.id);
         clearCart();
+      } catch (e) {
+        console.error(e);
+        Alert.alert("Error", "Ocurrió un error guardando tu pedido.");
       }
-    } catch (e) {
-      console.error("Error al pagar y guardar pedido:", e);
-      Alert.alert("Error", "El pago fue exitoso pero ocurrió un error al guardar tu pedido.");
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   };
-  
-  
-  
-  // 1) Cargar direcciones y último OrderId guardado
-  useEffect(() => {
-    const loadInitialData = async () => {
-      setAddressLoading(true);
 
-      // Carga direcciones del usuario (si ya existe)
-      if (user?.uid) {
-        try {
-          const list = await addressService.getUserAddresses(user.uid);
-          setAddresses(list);
-          if (list.length > 0) {
-            const defaultAddr = list.find((addr) => addr.isDefault);
-            setSelectedAddress(defaultAddr || list[0]);
-          }
-        } catch (err) {
-          console.error("Error cargando direcciones en OrderScreen:", err);
-          Alert.alert(
-            "Error",
-            "No se pudieron cargar tus direcciones. Inténtalo de nuevo."
-          );
-        }
-      }
-      setAddressLoading(false);
-
-      // Cargar el último ID de pedido desde AsyncStorage
-      try {
-        const storedOrderId = await AsyncStorage.getItem(LAST_ORDER_ID_KEY);
-        if (storedOrderId) {
-          console.log("Found stored order ID:", storedOrderId);
-          setCurrentOrderId(storedOrderId);
-        }
-      } catch (err) {
-        console.error("Failed to load last order ID from AsyncStorage", err);
-      }
-    };
-
-    loadInitialData();
-  }, [user?.uid]);
-
-  // 2) Escucha el estado del pedido en tiempo real, solo cuando user.uid y currentOrderId existen
-  useEffect(() => {
-    if (!currentOrderId || !user?.uid) {
-      return;
-    }
-
-    console.log(`Listening to order ${currentOrderId} for user.uid ${user.uid}`);
-
-    const orderRef = doc(db, "orders", currentOrderId);
-
-    // Antes de suscribirnos, probamos un getDoc para comprobar permisos/exists
-    const checkAndSubscribe = async () => {
-      try {
-        const singleSnap = await getDoc(orderRef);
-        if (!singleSnap.exists()) {
-          // El pedido no existe o no tenemos permiso
-          console.log(
-            "getDoc: El pedido no existe o no tienes permiso para leerlo."
-          );
-          setOrderStatusFromDb(null);
-          setCurrentOrderId(null);
-          await AsyncStorage.removeItem(LAST_ORDER_ID_KEY);
-          return;
-        }
-
-        // Si existía y tenemos permiso, suscribimos onSnapshot
-        const unsubscribe = onSnapshot(
-          orderRef,
-          async (docSnap) => { // <--- Haz esta función asíncrona
-            if (docSnap.exists()) {
-              const data = docSnap.data();
-              console.log(
-                "Order data changed:",
-                data.status,
-                "createdAt:",
-                data.createdAt?.toDate(),
-                "acceptedAt:",
-                data.acceptedAt?.toDate()
-              );
-              setOrderStatusFromDb(data.status);
-
-              // *** NUEVA LÓGICA AQUÍ ***
-              // Si el pedido es 'accepted' o 'rejected', se considera finalizado.
-              // Limpiamos el currentOrderId y el storage para que no aparezca de nuevo al reabrir.
-              if (data.status === "accepted" || data.status === "rejected") {
-                console.log(`Order ${currentOrderId} is now ${data.status}. Clearing local state and storage.`);
-                setCurrentOrderId(null);
-                setOrderStatusFromDb(null); // Opcional, pero ayuda a que la UI se "resetee"
-                await AsyncStorage.removeItem(LAST_ORDER_ID_KEY);
-              }
-
-            } else {
-              // Si alguien borró el pedido en Firestore, limpiamos estado
-              console.log(
-                "El documento de pedido ya no existe. Limpiando estado local."
-              );
-              setOrderStatusFromDb(null);
-              setCurrentOrderId(null);
-              await AsyncStorage.removeItem(LAST_ORDER_ID_KEY); // Usa await aquí
-            }
-          },
-          (error) => {
-            console.error("Error listening to order status:", error);
-            setOrderStatusFromDb("error");
-          }
-        );
-
-        // Guardamos el unsubscribe para el cleanup
-        return unsubscribe;
-      } catch (error) {
-        console.error("Error con getDoc() antes de onSnapshot:", error);
-        // Si aquí falla (ej. permisos insuficientes), limpiamos estado
-        setOrderStatusFromDb("error");
-        setCurrentOrderId(null);
-        await AsyncStorage.removeItem(LAST_ORDER_ID_KEY); // Usa await aquí
-      }
-    };
-
-    // Ejecutamos la comprobación y guardamos la función de cleanup
-    let unsubscribeFunction;
-    checkAndSubscribe().then((unsub) => {
-      unsubscribeFunction = unsub;
-    });
-
-    // Cleanup cuando el componente se desmonte o currentOrderId/user.uid cambien
-    return () => {
-      if (unsubscribeFunction) {
-        console.log(`Unsubscribed from order ${currentOrderId}.`);
-        unsubscribeFunction();
-      }
-    };
-  }, [currentOrderId, user?.uid]); // Dependencias del useEffect
-
-  // ... (el resto de tu código sigue igual)
-  // 3) Cargar la fecha de última actualización de los Términos y Condiciones
-  useEffect(() => {
-    const fetchLatestTermsDate = async () => {
-      try {
-        const { lastUpdated } = await termsConditionsService.getTermsAndConditions();
-        setLatestTermsLastUpdated(lastUpdated);
-      } catch (error) {
-        console.error("Error al cargar la última fecha de T&C:", error);
-      }
-    };
-    fetchLatestTermsDate();
-  }, []);
-
-  // 4) Inicializar acceptedItems cada vez que cambie el carrito
-  useEffect(() => {
-    const initialAccepted = {};
-    cart.forEach((item) => {
-      initialAccepted[item.product.id] = false;
-    });
-    setAcceptedItems(initialAccepted);
-  }, [cart]);
-
-  const toggleAccept = (productId) =>
-    setAcceptedItems((prev) => ({
-      ...prev,
-      [productId]: !prev[productId],
-    }));
-
-  const handleDecreaseQuantity = useCallback(
-    (item) => {
-      if (item.quantity - 1 <= 0) {
-        removeFromCart(item.product.id);
-      } else {
-        updateQuantity(item.product.id, item.quantity - 1);
-      }
-    },
-    [removeFromCart, updateQuantity]
-  );
-
-  const handleIncreaseQuantity = useCallback(
-    (item) => {
-      updateQuantity(item.product.id, item.quantity + 1);
-    },
-    [updateQuantity]
-  );
-
-  // Calcular total del carrito
-  const total = cart.reduce(
-    (sum, i) => sum + i.product.price * i.quantity,
-    0
-  );
-
-  // 5) Función para confirmar pedido
+  // Confirmación de pedido
   const confirmOrder = async () => {
-    // Validar Términos y Condiciones
-    const userAcceptedTermsAt = userProfile?.termsAcceptedAt?.toDate();
+    const acceptedAt = userProfile?.termsAcceptedAt?.toDate();
     if (
-      !userAcceptedTermsAt ||
+      !acceptedAt ||
       !latestTermsLastUpdated ||
-      userAcceptedTermsAt.getTime() < latestTermsLastUpdated.getTime()
+      acceptedAt.getTime() < latestTermsLastUpdated.getTime()
     ) {
-      Alert.alert(
+      return Alert.alert(
         "Aviso Importante",
-        "Debes leer y aceptar la última versión de los Términos y Condiciones para poder realizar compras.",
+        "Debes aceptar la última versión de los Términos y Condiciones.",
         [
           { text: "Cancelar", style: "cancel" },
-          {
-            text: "Ir a Términos",
-            onPress: () => navigation.navigate("TermsConditions"),
-          },
+          { text: "Ir a Términos", onPress: () => navigation.navigate("TermsConditions") },
         ]
       );
-      return;
     }
-  
-    // Validar dirección
+
     if (!selectedAddress) {
-      Alert.alert(
-        "Elige una dirección",
-        "Por favor, selecciona una dirección de envío antes de continuar."
-      );
-      return;
+      return Alert.alert("Elige una dirección", "Selecciona una antes de continuar.");
     }
-  
-    // Validar aceptación de todos los ítems
-    const allAccepted = cart.every((i) => acceptedItems[i.product.id]);
-    if (!allAccepted) {
-      Alert.alert(
-        "Acepta todos los productos antes",
-        "Debes aceptar todos los productos en tu carrito para confirmar el pedido."
-      );
-      return;
-    }
-  
-    // Preparar items para el pedido
+
     const itemsForOrder = cart.map((i) => ({
       id: i.product.id,
       name: i.product.name,
       price: i.product.price,
       quantity: i.quantity,
-      imageUrl: i.product.image
+      imageUrl: i.product.image,
     }));
-    
-  
-    await startStripePayment(itemsForOrder); // Aquí empieza todo el proceso de pago
+
+    await startStripePayment(itemsForOrder);
   };
-  
 
-     
-
+  const total = cart.reduce((sum, i) => sum + i.product.price * i.quantity, 0);
   const displayStatus = currentOrderId ? orderStatusFromDb : null;
 
   return (
     <SafeAreaView style={s.container}>
-      {/* Mostrar estado del pedido si existe */}
       {displayStatus && (
         <Text
           style={[
             s.status,
-            displayStatus === "pending"
-              ? s.pending
-              : displayStatus === "accepted"
-              ? s.accepted
-              : s.rejected,
+            displayStatus === "pending" ? s.pending
+            : displayStatus === "accepted" ? s.accepted
+            : s.rejected,
           ]}
         >
           {displayStatus === "pending"
             ? "⏳ Esperando aceptación"
             : displayStatus === "accepted"
             ? "✅ Pedido aceptado"
-            : displayStatus === "rejected"
-            ? "❌ Pedido rechazado"
-            : "Estado desconocido"}
+            : "❌ Pedido rechazado"}
         </Text>
       )}
 
-      {/* Si hay ítems en carrito o ya existe un pedido en progreso, muestro la lista */}
       {(cart.length > 0 || currentOrderId) ? (
-        <FlatList
-          data={cart}
-          keyExtractor={(item) => item.product.id}
-          renderItem={({ item }) => (
-            <View style={s.itemContainer}>
-            <View style={s.row}>
-              <Image source={{ uri: item.product.image }} style={s.img} />
-              <View style={s.info}>
-                <Text 
-                style={s.name}
-                numberOfLines={2}         // hasta 2 líneas
-                ellipsizeMode="tail"      // recorta con “…” si sobrepasa
-                >
-                  {item.product.name}</Text>
-                <Text>
-                  {item.product.price.toFixed(2)}€ × {item.quantity}
-                </Text>
-              </View>
-              <View style={s.qty}>
-                <TouchableOpacity onPress={() => handleDecreaseQuantity(item)}>
-                  <Text style={s.qtyBtn}>−</Text>
-                </TouchableOpacity>
-                <Text style={s.qtyText}>{item.quantity}</Text>
-                <TouchableOpacity onPress={() => handleIncreaseQuantity(item)}>
-                  <Text style={s.qtyBtn}>＋</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={s.actions}>
-                <TouchableOpacity
-                  style={s.deleteButton}
-                  onPress={() => removeFromCart(item.product.id)}
-                >
-                  <Ionicons name="trash-outline" size={22} color="#D32F2F" />
-                </TouchableOpacity>
-
-                <TouchableOpacity onPress={() => toggleAccept(item.product.id)}style={s.acceptButton}>
-                  <Text
-                    style={[
-                      s.acceptText,
-                      acceptedItems[item.product.id] && s.acceptedText
-                    ]}
-                  >
-                    {acceptedItems[item.product.id] ? "Aceptado" : "Aceptar"}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            </View>
-          )}
+       <FlatList
+       data={cart}
+       keyExtractor={(item) => item.product.id}
+       renderItem={({ item }) => (
+         <View style={s.itemContainer}>
+           <View style={s.itemRow}>
+             {/* 1) Imagen a la izquierda */}
+             <Image source={{ uri: item.product.image }} style={s.img} />
+     
+             {/* 2) Detalles: título, precio y controles */}
+             <View style={s.details}>
+               {/* Línea 1: Título */}
+               <Text style={s.title} numberOfLines={2} ellipsizeMode="tail">
+                 {item.product.name}
+               </Text>
+     
+               {/* Línea 2: Precio */}
+               <Text style={s.price}>
+                 {item.product.price.toFixed(2)}€
+               </Text>
+     
+               {/* Línea 3: controles cantidad a la izquierda, tachito a la derecha */}
+               <View style={s.quantityRow}>
+                 <View style={s.qtyControls}>
+                   <TouchableOpacity onPress={() => {
+                     if (item.quantity - 1 <= 0) removeFromCart(item.product.id);
+                     else updateQuantity(item.product.id, item.quantity - 1);
+                   }}>
+                     <Text style={s.qtyBtn}>−</Text>
+                   </TouchableOpacity>
+                   <Text style={s.qtyText}>{item.quantity}</Text>
+                   <TouchableOpacity onPress={() => updateQuantity(item.product.id, item.quantity + 1)}>
+                     <Text style={s.qtyBtn}>＋</Text>
+                   </TouchableOpacity>
+                 </View>
+                 <TouchableOpacity
+                   onPress={() => removeFromCart(item.product.id)}
+                   style={s.deleteButton}
+                 >
+                   <Ionicons name="trash-outline" size={22} color="#D32F2F" />
+                 </TouchableOpacity>
+               </View>
+             </View>
+           </View>
+         </View>
+       )}
           ListEmptyComponent={
             currentOrderId && (
               <View style={s.orderInProgressContainer}>
                 <Text style={s.orderInProgressText}>
-                  Tu pedido está en proceso de{" "}
-                  {displayStatus === "pending" ? "espera" : "revisión"}...
+                  Tu pedido está en proceso...
                 </Text>
                 <Text style={s.orderInProgressSubtext}>
-                  Puedes salir de esta pantalla. El estado se actualizará
-                  automáticamente.
+                  Puedes salir de esta pantalla; el estado se actualizará.
                 </Text>
               </View>
             )
@@ -462,72 +309,49 @@ export default function OrderScreen() {
         </View>
       )}
 
-      {/* Sección de dirección */}
+      {/* Dirección */}
       <View style={s.section}>
         <Text style={s.label}>Dirección envío:</Text>
         {addressLoading ? (
-          <ActivityIndicator color="#007bff" style={{ marginTop: 10 }} />
+          <ActivityIndicator color="#007bff" />
         ) : selectedAddress ? (
           <View style={s.selectedAddressDetails}>
+            <Text style={s.addressDetailText}>{selectedAddress.fullName}</Text>
             <Text style={s.addressDetailText}>
-              {selectedAddress.fullName}
+              {selectedAddress.street}{selectedAddress.number ? `, ${selectedAddress.number}` : ""}
             </Text>
             <Text style={s.addressDetailText}>
-              {selectedAddress.street}
-              {selectedAddress.number ? ", " + selectedAddress.number : ""}
-              {selectedAddress.apartment
-                ? " (" + selectedAddress.apartment + ")"
-                : ""}
+              {selectedAddress.city}, {selectedAddress.state} {selectedAddress.zipCode}
             </Text>
-            <Text style={s.addressDetailText}>
-              {selectedAddress.city}, {selectedAddress.state}{" "}
-              {selectedAddress.zipCode}
-            </Text>
-            <Text style={s.addressDetailText}>
-              {selectedAddress.country}
-            </Text>
-            {selectedAddress.phoneNumber && (
-              <Text style={s.addressDetailText}>
-                Tel: {selectedAddress.phoneNumber}
-              </Text>
-            )}
           </View>
         ) : (
           <Text style={s.noAddressText}>
-            No hay direcciones disponibles. Por favor, añade una en tu perfil.
+            No hay direcciones disponibles.
           </Text>
         )}
       </View>
 
-      {/* Sección de cliente/fecha */}
+      {/* Cliente/Fecha */}
       <View style={s.section}>
         <Text style={s.label}>Cliente:</Text>
-        <Text>{userProfile?.displayName || user?.email || "Cargando..."}</Text>
+        <Text>{userProfile?.displayName || user?.email}</Text>
         <Text style={s.label}>Fecha:</Text>
         <Text>{DateTime.local().toFormat("dd/MM/yyyy")}</Text>
       </View>
 
-      {/* Sección de pago (fija) */}
+      {/* Pago */}
       <View style={s.section}>
         <Text style={s.label}>Pago:</Text>
         <Text>Tarjeta ****1234</Text>
       </View>
-{/* boton de STRIPE */}
-      {/* <Button
-  title="Probar pago con Stripe"
-  onPress={confirmOrder}
-  color="#4caf50"
-/> */}
 
-      {/* Footer con total y botón */}
+      {/* Footer */}
       <View style={s.footer}>
         <Text style={s.total}>Total: {total.toFixed(2)}€</Text>
         <Button
           title={loading ? "Enviando..." : "Confirmar pedido"}
           onPress={confirmOrder}
-          disabled={
-            loading || cart.length === 0 || !selectedAddress || currentOrderId !== null
-          }
+          disabled={loading || cart.length === 0 || !selectedAddress || currentOrderId !== null}
         />
       </View>
     </SafeAreaView>
@@ -541,6 +365,48 @@ const s = StyleSheet.create({
     paddingTop: 10,
     backgroundColor: "#fff" 
   },
+  itemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  details: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  title: {
+    fontWeight: "bold",
+    marginBottom: 4,
+  },
+  price: {
+    marginBottom: 8,
+  },
+  quantityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  qtyControls: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  qtyBtn: {
+    fontSize: 18,
+    width: 28,
+    textAlign: "center",
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 4,
+  },
+  qtyText: {
+    marginHorizontal: 8,
+    minWidth: 24,
+    textAlign: "center",
+  },
+  deleteButton: {
+    padding: 6,
+    borderRadius: 4,
+  },
+
   status: {
     textAlign: "center",
     marginVertical: 8,
