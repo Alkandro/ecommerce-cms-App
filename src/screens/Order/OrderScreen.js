@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
   SafeAreaView,
+  Platform,
 } from "react-native";
 import { DateTime } from "luxon";
 import { useAuth } from "../../context/AuthContext";
@@ -244,6 +245,7 @@ export default function OrderScreen() {
        <FlatList
        data={cart}
        keyExtractor={(item) => item.product.id}
+       style={{ marginTop: Platform.OS === "ios" ? 20 : 40 }}
        renderItem={({ item }) => (
          <View style={s.itemContainer}>
            <View style={s.itemRow}>
@@ -349,7 +351,7 @@ export default function OrderScreen() {
       <View style={s.footer}>
         <Text style={s.total}>Total: {total.toFixed(2)}€</Text>
         <Button
-          title={loading ? "Enviando..." : "Confirmar pedido"}
+          title={loading ? "Enviando..." : "Pagar"}
           onPress={confirmOrder}
           disabled={loading || cart.length === 0 || !selectedAddress || currentOrderId !== null}
         />
@@ -424,16 +426,19 @@ const s = StyleSheet.create({
     color: "#388e3c" 
   },
   itemContainer: {
+    marginHorizontal: Platform.OS === "ios" ? 10 : 0,
     backgroundColor: "#f5f5f5",    // un gris muy claro
     borderRadius: 12,               // bordes suaves
     padding: 10,                    // espacio interior
-    marginBottom: 12,               // separación entre ítems
-    // sombra ligera (opcional):
+    marginBottom: 8,               // separación entre ítems
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+   
   },
   row: { 
     flexDirection: "row", 
