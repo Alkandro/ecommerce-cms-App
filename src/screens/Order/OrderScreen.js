@@ -219,7 +219,12 @@ export default function OrderScreen() {
     await startStripePayment(itemsForOrder);
   };
 
-  const total = cart.reduce((sum, i) => sum + i.product.price * i.quantity, 0);
+  const total = cart.reduce((sum, i) => {
+    const unitPrice = i.product.discount > 0
+      ? i.product.price * (1 - i.product.discount / 100)
+      : i.product.price;
+    return sum + unitPrice * i.quantity;
+  }, 0);
   const displayStatus = currentOrderId ? orderStatusFromDb : null;
 
   return (
@@ -350,11 +355,24 @@ export default function OrderScreen() {
       {/* Footer */}
       <View style={s.footer}>
         <Text style={s.total}>Total: {total.toFixed(2)}€</Text>
-        <Button
-          title={loading ? "Enviando..." : "Pagar"}
-          onPress={confirmOrder}
-          disabled={loading || cart.length === 0 || !selectedAddress || currentOrderId !== null}
-        />
+         <Button
+   title={loading ? "Enviando..." : "Pagar"}
+   onPress={() => {
+     const itemsForOrder = cart.map(i => ({
+       id: i.product.id,
+       name: i.product.name,
+       price: i.product.price,
+       quantity: i.quantity,
+       imageUrl: i.product.image,
+     }));
+     // Navegamos a PaymentMethodsScreen pasándole items y total
+     navigation.navigate("PaymentMethods", {
+       items: itemsForOrder,
+       total: total
+     });
+   }}
+   disabled={loading || cart.length === 0 || !selectedAddress || currentOrderId !== null}
+ />
       </View>
     </SafeAreaView>
   );

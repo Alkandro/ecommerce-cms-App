@@ -133,7 +133,7 @@ export default function ProductScreen({ route, navigation }) {
     Toast.show(`${product.name} añadido al carrito!`, {
       position: Toast.positions.CENTER,
     });
-    navigation.navigate("OrderScreen");
+    navigation.navigate("Order");
   };
   
 

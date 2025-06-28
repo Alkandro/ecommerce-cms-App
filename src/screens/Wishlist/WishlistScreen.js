@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   StyleSheet,
   TouchableOpacity,
+  Platform,
   Dimensions // Importa Dimensions
 } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
@@ -173,11 +174,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f4f6f8",
+    
   },
   listContent: {
     padding: cardMargin, // Padding general de la lista
   },
   cardWrapper: {
+    margin: Platform.OS === "ios" ? 40 : 30,
     width: cardWidth, // Usa el ancho calculado
     // Eliminamos el marginHorizontal aquí para aplicarlo directamente en renderItem
     marginBottom: 16, // Espacio entre filas
