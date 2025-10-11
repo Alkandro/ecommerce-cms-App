@@ -7,7 +7,6 @@ import {
   FlatList,
   Image,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   Platform,
   Alert,
@@ -16,6 +15,7 @@ import {
   Animated,
   ScrollView, // <-- Importamos ScrollView para las miniaturas
 } from "react-native";
+import { SafeAreaView } from 'react-native-safe-area-context';
 import COLORS from "../../../constants/colors";
 import { useAuth } from "../../context/AuthContext";
 import { wishlistService } from "../../services/wishlist";
@@ -133,7 +133,7 @@ export default function ProductScreen({ route, navigation }) {
     Toast.show(`${product.name} añadido al carrito!`, {
       position: Toast.positions.CENTER,
     });
-    navigation.navigate("Order");
+    navigation.navigate("Tabs", { screen: "Order" });
   };
   
 

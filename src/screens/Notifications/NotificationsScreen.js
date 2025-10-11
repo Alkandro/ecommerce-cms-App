@@ -6,12 +6,12 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   ActivityIndicator,
   FlatList,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
@@ -24,42 +24,67 @@ export default function NotificationsScreen() {
   const [loading, setLoading] = useState(true);
   const isFocused = useIsFocused(); 
 
-  // 1) Suscripción a notificaciones del usuario en tiempo real
+  // Suscripción a notificaciones del usuario en tiempo real
   useEffect(() => {
-    let unsubscribe;
-
-    if (user?.uid && isFocused) {
-      setLoading(true);
-      unsubscribe = notificationService.getUserNotifications(user.uid, (data) => {
-        setNotifications(data);
-        setLoading(false);
-      });
-    } else if (!user?.uid) {
-      setLoading(false);
+    // Si no hay usuario, limpiar y salir inmediatamente
+    if (!user?.uid) {
       setNotifications([]);
+      setLoading(false);
+      return; // ← IMPORTANTE: salir antes de crear listeners
     }
 
+    // Solo cargar si la pantalla está enfocada Y hay usuario
+    if (!isFocused) {
+      return;
+    }
+
+    setLoading(true);
+    
+    const unsubscribe = notificationService.getUserNotifications(
+      user.uid,
+      (data) => {
+        setNotifications(data);
+        setLoading(false);
+      }
+    );
+
+    // Limpiar listener cuando cambie user, isFocused, o se desmonte
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [user, isFocused]);
+  }, [user?.uid, isFocused]); // ← Cambié user por user?.uid para mejor control
 
   const handleBackButton = () => {
     navigation.goBack();
   };
 
-  // 2) Cuando se presiona la notificación, la marcamos como leída
+  // Cuando se presiona la notificación, la marcamos como leída
   const handleNotificationPress = async (notificationId) => {
+    // Verificar que hay usuario antes de intentar marcar como leída
+    if (!user?.uid) {
+      Alert.alert("Error", "Debes iniciar sesión para realizar esta acción.");
+      return;
+    }
+
     try {
       await notificationService.markNotificationAsRead(notificationId);
     } catch (err) {
-      console.error("Error al marcar notificación como leída:", err);
-      Alert.alert("Error", "No se pudo marcar como leída. Inténtalo de nuevo.");
+      // Ignorar errores de permisos (ocurren al cerrar sesión)
+      if (err.code !== 'permission-denied') {
+        console.error("Error al marcar notificación como leída:", err);
+        Alert.alert("Error", "No se pudo marcar como leída. Inténtalo de nuevo.");
+      }
     }
   };
 
-  // 3) Eliminar notificación (después de confirmación)
+  // Eliminar notificación (después de confirmación)
   const handleDeleteNotification = (notificationId) => {
+    // Verificar que hay usuario antes de intentar eliminar
+    if (!user?.uid) {
+      Alert.alert("Error", "Debes iniciar sesión para realizar esta acción.");
+      return;
+    }
+
     Alert.alert(
       "Eliminar notificación",
       "¿Estás seguro de que deseas eliminar esta notificación?",
@@ -71,11 +96,12 @@ export default function NotificationsScreen() {
           onPress: async () => {
             try {
               await notificationService.deleteNotification(notificationId);
-              // Opcional: mostrar un toast o alerta de éxito
-              // Alert.alert("Eliminada", "Notificación eliminada correctamente.");
             } catch (err) {
-              console.error("Error al eliminar notificación:", err);
-              Alert.alert("Error", "No se pudo eliminar. Inténtalo de nuevo.");
+              // Ignorar errores de permisos
+              if (err.code !== 'permission-denied') {
+                console.error("Error al eliminar notificación:", err);
+                Alert.alert("Error", "No se pudo eliminar. Inténtalo de nuevo.");
+              }
             }
           },
         },
@@ -83,7 +109,7 @@ export default function NotificationsScreen() {
     );
   };
 
-  // 4) Renderizado de cada ítem en la lista
+  // Renderizado de cada ítem en la lista
   const renderNotificationItem = ({ item }) => (
     <View
       style={[
@@ -203,7 +229,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   headerRight: {
-    width: 28, // Para mantener el título centrado
+    width: 28,
   },
   emptyContainer: {
     flex: 1,
@@ -246,7 +272,7 @@ const styles = StyleSheet.create({
   notificationTouchable: {
     flexDirection: "row",
     alignItems: "center",
-    flex: 1, // Ocupa todo el espacio salvo el botón de eliminar
+    flex: 1,
   },
   notificationIcon: {
     marginRight: 15,

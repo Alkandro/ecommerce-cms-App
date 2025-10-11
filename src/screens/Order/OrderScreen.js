@@ -9,9 +9,9 @@ import {
   Button,
   Alert,
   ActivityIndicator,
-  SafeAreaView,
   Platform,
 } from "react-native";
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { DateTime } from "luxon";
 import { useAuth } from "../../context/AuthContext";
 import { useCart } from "../../context/CartContext";
@@ -219,13 +219,24 @@ export default function OrderScreen() {
     await startStripePayment(itemsForOrder);
   };
 
+  // const total = cart.reduce((sum, i) => {
+  //   const unitPrice = i.product.discount > 0
+  //     ? i.product.price * (1 - i.product.discount / 100)
+  //     : i.product.price;
+  //   return sum + unitPrice * i.quantity;
+  // }, 0);
+  // const displayStatus = currentOrderId ? orderStatusFromDb : null;
+
+
+  // ✅ CORRECCIÓN: Calcula el total sin aplicar descuento de nuevo
   const total = cart.reduce((sum, i) => {
-    const unitPrice = i.product.discount > 0
-      ? i.product.price * (1 - i.product.discount / 100)
-      : i.product.price;
+    // El precio ya viene con descuento aplicado desde ProductScreen
+    const unitPrice = i.product.price;
     return sum + unitPrice * i.quantity;
   }, 0);
+
   const displayStatus = currentOrderId ? orderStatusFromDb : null;
+
 
   return (
     <SafeAreaView style={s.container}>
@@ -266,7 +277,7 @@ export default function OrderScreen() {
      
                {/* Línea 2: Precio */}
                <Text style={s.price}>
-                 {item.product.price.toFixed(2)}€
+                 {item.product.price.toFixed(2)}¥
                </Text>
      
                {/* Línea 3: controles cantidad a la izquierda, tachito a la derecha */}
@@ -354,7 +365,7 @@ export default function OrderScreen() {
 
       {/* Footer */}
       <View style={s.footer}>
-        <Text style={s.total}>Total: {total.toFixed(2)}€</Text>
+        <Text style={s.total}>Total: {total.toFixed(2)}¥</Text>
          <Button
    title={loading ? "Enviando..." : "Pagar"}
    onPress={() => {
@@ -368,7 +379,8 @@ export default function OrderScreen() {
      // Navegamos a PaymentMethodsScreen pasándole items y total
      navigation.navigate("PaymentMethods", {
        items: itemsForOrder,
-       total: total
+       total: total,
+       selectedAddress: selectedAddress,
      });
    }}
    disabled={loading || cart.length === 0 || !selectedAddress || currentOrderId !== null}
