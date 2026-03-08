@@ -5,8 +5,8 @@ import { AuthProvider, useAuth } from "./src/context/AuthContext";
 import { CartProvider } from "./src/context/CartContext";
 import { View, ActivityIndicator, StyleSheet, AppState } from "react-native";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
-import { db } from './src/firebase/firebaseConfig';
-import { StripeProvider } from '@stripe/stripe-react-native';
+import { db } from "./src/firebase/firebaseConfig";
+import { StripeProvider } from "@stripe/stripe-react-native";
 
 function InitialLoader() {
   const { loading, user } = useAuth();
@@ -16,22 +16,25 @@ function InitialLoader() {
   const updateLastSeen = async () => {
     if (user?.uid) {
       try {
-        const userRef = doc(db, 'users', user.uid);
+        const userRef = doc(db, "users", user.uid);
         await updateDoc(userRef, { updatedAt: serverTimestamp() });
       } catch (error) {
-        console.error('Error al actualizar lastSeen:', error);
+        console.error("Error al actualizar lastSeen:", error);
       }
     }
   };
 
   useEffect(() => {
     const handleAppStateChange = (nextAppState) => {
-      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextAppState === "active"
+      ) {
         updateLastSeen();
       }
       appState.current = nextAppState;
     };
-    const sub = AppState.addEventListener('change', handleAppStateChange);
+    const sub = AppState.addEventListener("change", handleAppStateChange);
 
     if (user?.uid) {
       updateLastSeen();
@@ -77,8 +80,8 @@ export default function App() {
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f4f6f8',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f4f6f8",
   },
 });
